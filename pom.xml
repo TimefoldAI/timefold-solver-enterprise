@@ -23,6 +23,7 @@
         <module>build/bom</module>
         <module>build/build-parent</module>
         <module>core</module>
+        <module>quarkus</module>
     </modules>
 
     <profiles>
