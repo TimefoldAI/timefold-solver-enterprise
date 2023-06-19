@@ -3,7 +3,8 @@ package ai.timefold.solver.enterprise.core.multithreaded;
 import ai.timefold.solver.core.api.score.Score;
 import ai.timefold.solver.core.impl.heuristic.move.Move;
 
-final class ApplyStepOperation<Solution_, Score_ extends Score<Score_>> extends MoveThreadOperation<Solution_> {
+final class ApplyStepOperation<Solution_, Score_ extends Score<Score_>>
+        extends MoveThreadOperation<Solution_> {
 
     private final int stepIndex;
     private final Move<Solution_> step;
