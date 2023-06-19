@@ -22,8 +22,21 @@
     <modules>
         <module>build/bom</module>
         <module>build/build-parent</module>
-        <module>build/javadoc</module>
         <module>core</module>
     </modules>
+
+    <profiles>
+        <profile>
+            <id>fullProfile</id>
+            <activation>
+                <property>
+                    <name>full</name>
+                </property>
+            </activation>
+            <modules>
+                <module>build/javadoc</module>
+            </modules>
+        </profile>
+    </profiles>
 
 </project>
