@@ -2,7 +2,7 @@ name: JVM and OS matrix
 
 on:
   pull_request:
-    branches: [development, '*.x']
+    branches: [main, '*.x']
 
 jobs:
   build:
