@@ -1,0 +1,69 @@
+name: JVM and OS matrix
+
+on:
+  pull_request:
+    branches: [development, '*.x']
+
+jobs:
+  build:
+    concurrency:
+      group: pull_request-${{ github.event_name }}-${{ github.head_ref }}-${{ matrix.os }}-${{ matrix.java-version }}
+      cancel-in-progress: true
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        java-version: [ 17, 20 ] #Latest two LTS + latest non-LTS.
+    timeout-minutes: 120
+    steps:
+      # Clone timefold-solver
+      # Need to check for stale repo, since Github is not aware of the build chain and therefore doesn't automate it.
+      - name: Checkout timefold-solver to access the scripts
+        uses: actions/checkout@v3
+        with:
+          path: './timefold-solver'
+          repository: 'TimefoldAI/timefold-solver'
+      - name: Find the proper timefold-solver repo and branch
+        env:
+          CHAIN_USER: ${{ github.actor }}
+          CHAIN_BRANCH: ${{ github.head_ref }}
+          CHAIN_REPO: "timefold-solver"
+          CHAIN_DEFAULT_BRANCH: ${{ endsWith(github.head_ref, '.x') && github.head_ref || 'main' }}
+        shell: bash
+        run: |
+          ./timefold-solver/.github/scripts/check_chain_repo.sh
+          rm -rf ./timefold-solver
+      - name: Checkout the proper timefold-solver branch
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ env.TARGET_CHAIN_USER }}/${{ env.TARGET_CHAIN_REPO }}
+          ref: ${{ env.TARGET_CHAIN_BRANCH }}
+          path: './timefold-solver'
+      - name: Prevent stale fork of timefold-solver
+        env:
+          BLESSED_REPO: "timefold-solver"
+          BLESSED_BRANCH: ${{ endsWith(github.head_ref, '.x') && github.head_ref || 'main' }}
+        shell: bash
+        working-directory: ./timefold-solver
+        run: .github/scripts/prevent_stale_fork.sh
+
+      # Clone timefold-solver-advanced
+      # No need to check for stale repo, as Github merges the main repo into the fork automatically.
+      - name: Checkout timefold-solver-advanced
+        uses: actions/checkout@v3
+        with:
+          path: './timefold-solver-advanced'
+
+      # Build and test
+      - name: "Setup Java and Maven"
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{matrix.java-version}}
+          distribution: 'temurin'
+          cache: 'maven'
+      - name: Quickly build timefold-solver
+        working-directory: ./timefold-solver
+        run: mvn -B -Dfull -DskipTests clean install
+      - name: Build and test timefold-solver-advanced
+        working-directory: ./timefold-solver-advanced
+        run: mvn -B -Dfull verify
