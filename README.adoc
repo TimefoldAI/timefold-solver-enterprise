@@ -1,0 +1,59 @@
+:projectKey: TimefoldAI_timefold-solver-enterprise
+// TODO Enable Sonar
+// :sonarBadge: image:https://sonarcloud.io/api/project_badges/measure?project={projectKey}
+// :sonarLink: link="https://sonarcloud.io/dashboard?id={projectKey}"
+
+:branch: main
+
+**WARNING: This repo is currently in flux, and the Maven project structure is still likely to change.
+Until Timefold Solver 1.0.0 is released, please do not depend on these artifacts.**
+
+_Planning optimization made easy._ +
+https://timefold.ai[timefold.ai]
+
+image:https://img.shields.io/badge/Java-17+-brightgreen.svg?style=for-the-badge["JVM support", link="https://sdkman.io"]
+image:https://img.shields.io/github/commit-activity/m/TimefoldAI/timefold-solver?label=commits&style=for-the-badge["Commit Activity", link="https://github.com/TimefoldAI/timefold-solver/pulse"]
+
+image:https://img.shields.io/badge/stackoverflow-ask_question-orange.svg?logo=stackoverflow&style=for-the-badge["Stackoverflow", link="https://stackoverflow.com/questions/tagged/timefold"]
+image:https://img.shields.io/github/discussions/TimefoldAI/timefold-solver?style=for-the-badge&logo=github["GitHub Discussions", link="https://github.com/TimefoldAI/timefold-solver/discussions"]
+image:https://img.shields.io/github/issues/TimefoldAI/timefold-solver?style=for-the-badge&logo=github["GitHub Issues", link="https://github.com/TimefoldAI/timefold-solver/issues"]
+
+== Timefold Solver Enterprise Edition
+
+_Timefold Solver Enterprise Edition_ is a commercial offering by _Timefold_.
+It enhances the _Timefold Solver Community Edition_ by features such as nearby selection and multi-threaded solving.
+
+Even though the source code is available here, *_Timefold Solver Enterprise Edition_ is not open source*.
+You are not allowed to modify, distribute, or use this source code and resulting binaries
+for any purpose other than for development and testing.
+*To use _Timefold Solver Enterprise Edition_ in production, you need a license.*
+https://timefold.ai/company/contact[Contact Timefold sales] to obtain one.
+
+Users who do not require the additional features of _Timefold Solver Enterprise Edition_
+are encouraged to use the https://github.com/TimefoldAI/timefold-solver/[_Timefold Solver Community Edition_] instead.
+This is a free and open source project, licensed under the Apache License 2.0.
+
+== Using Timefold Solver Enterprise Edition
+
+To use _Timefold Solver Enterprise Edition_,
+replace the following artifacts provided by the _Timefold Solver Community Edition_:
+
+|===
+|Community Edition|Enterprise Edition
+
+|`ai.timefold.solver:timefold-solver-bom`
+|`ai.timefold.solver.enterprise:timefold-solver-enterprise-bom`
+
+|`ai.timefold.solver:timefold-solver-core`
+|`ai.timefold.solver.enterprise:timefold-solver-enterprise-core`
+
+|`ai.timefold.solver:timefold-solver-quarkus`
+|`ai.timefold.solver.enterprise:timefold-solver-enterprise-quarkus`
+
+|`ai.timefold.solver:timefold-solver-spring-boot-starter`
+|`ai.timefold.solver.enterprise:timefold-solver-enterprise-spring-boot-starter`
+|===
+
+If your project only uses a subset of the Community Edition artifacts listed above,
+only replace those with their Enterprise Edition counterparts.
+There is no need to add the other artifacts listed.
