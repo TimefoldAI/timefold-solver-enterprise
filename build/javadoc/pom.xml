@@ -3,62 +3,22 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <parent>
-    <groupId>ai.timefold.solver</groupId>
-    <artifactId>timefold-solver-build-parent</artifactId>
+    <groupId>ai.timefold.solver.advanced</groupId>
+    <artifactId>timefold-solver-advanced-build-parent</artifactId>
     <version>0.9.40-SNAPSHOT</version>
     <relativePath>../build-parent/pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>timefold-solver-javadoc</artifactId>
+  <artifactId>timefold-solver-advanced-javadoc</artifactId>
   <packaging>pom</packaging>
-  <name>Timefold Solver Javadoc</name>
+  <name>Timefold Solver Advanced Edition Javadoc</name>
 
   <dependencies>
     <!-- Javadoc dependencies -->
     <dependency>
-      <groupId>ai.timefold.solver</groupId>
-      <artifactId>timefold-solver-core-impl</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>ai.timefold.solver</groupId>
-      <artifactId>timefold-solver-benchmark</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>ai.timefold.solver</groupId>
-      <artifactId>timefold-solver-persistence-common</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>ai.timefold.solver</groupId>
-      <artifactId>timefold-solver-jaxb</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>ai.timefold.solver</groupId>
-      <artifactId>timefold-solver-jackson</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>ai.timefold.solver</groupId>
-      <artifactId>timefold-solver-jsonb</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>ai.timefold.solver</groupId>
-      <artifactId>timefold-solver-jpa</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>ai.timefold.solver</groupId>
-      <artifactId>timefold-solver-test</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>io.quarkus.gizmo</groupId>
-      <artifactId>gizmo</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.ow2.asm</groupId>
-      <artifactId>asm</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.graalvm.sdk</groupId>
-      <artifactId>graal-sdk</artifactId>
+      <groupId>ai.timefold.solver.advanced</groupId>
+      <artifactId>timefold-solver-advanced-core</artifactId>
     </dependency>
   </dependencies>
 
@@ -78,6 +38,7 @@
               <includeDependencySources>true</includeDependencySources>
               <dependencySourceIncludes>
                 <dependencySourceInclude>ai.timefold.solver:*</dependencySourceInclude>
+                <dependencySourceInclude>ai.timefold.solver.advanced:*</dependencySourceInclude>
               </dependencySourceIncludes>
             </configuration>
           </execution>

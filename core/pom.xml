@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <parent>
+    <groupId>ai.timefold.solver.advanced</groupId>
+    <artifactId>timefold-solver-advanced-build-parent</artifactId>
+    <version>0.9.40-SNAPSHOT</version>
+    <relativePath>../build/build-parent/pom.xml</relativePath>
+  </parent>
+  <modelVersion>4.0.0</modelVersion>
+
+  <artifactId>timefold-solver-advanced-core-parent</artifactId>
+
+  <name>Timefold Solver Advanced Edition core parent</name>
+  <description>
+    Timefold solves planning problems.
+    This lightweight, embeddable planning engine implements powerful and scalable algorithms
+    to optimize business resource scheduling and planning.
+
+    This module contains implementation of the commercial features of Timefold Solver Advanced.
+  </description>
+  <url>https://timefold.ai</url>
+
+  <packaging>pom</packaging>
+
+  <modules>
+    <module>core</module>
+    <module>core-impl</module>
+  </modules>
+
+</project>

@@ -10,6 +10,7 @@
         <relativePath/>
     </parent>
 
+    <groupId>ai.timefold.solver.advanced</groupId>
     <artifactId>timefold-solver-advanced-parent</artifactId>
     <packaging>pom</packaging>
     <name>Timefold Solver Advanced Edition</name>
@@ -17,5 +18,12 @@
     <properties>
         <enforcer.failOnDuplicatedClasses>false</enforcer.failOnDuplicatedClasses> <!-- Quarkus. -->
     </properties>
+
+    <modules>
+        <module>build/bom</module>
+        <module>build/build-parent</module>
+        <module>build/javadoc</module>
+        <module>core</module>
+    </modules>
 
 </project>
