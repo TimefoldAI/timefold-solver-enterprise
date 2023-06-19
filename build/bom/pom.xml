@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>ai.timefold.solver.advanced</groupId>
+    <artifactId>timefold-solver-advanced-parent</artifactId>
+    <version>0.9.40-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>timefold-solver-advanced-bom</artifactId>
+  <packaging>pom</packaging>
+
+  <properties>
+    <version.ai.timefold.solver>${project.version}</version.ai.timefold.solver>
+  </properties>
+
+  <name>Timefold Solver Advanced Edition BOM (Bill Of Materials)</name>
+  <description>
+    Import this BOM in your dependencyManagement if you want to depend on multiple Timefold Solver artifacts.
+  </description>
+
+  <dependencyManagement>
+    <dependencies>
+      <!--
+        IMPORTANT: Only declare modules of groupId ai.timefold.solver.advanced.
+        Do not declare external dependencies, this is not a platform bom.
+        Do not declare <scope> or <optional>.
+        Always declare the sources jar and the test-jar too.
+      -->
+      <dependency>
+        <groupId>ai.timefold.solver</groupId>
+        <artifactId>timefold-solver-bom</artifactId>
+        <version>${version.ai.timefold.solver}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>ai.timefold.solver.advanced</groupId>
+        <artifactId>timefold-solver-advanced-core</artifactId>
+        <version>${version.ai.timefold.solver}</version>
+      </dependency>
+      <dependency>
+        <groupId>ai.timefold.solver.advanced</groupId>
+        <artifactId>timefold-solver-advanced-core</artifactId>
+        <version>${version.ai.timefold.solver}</version>
+        <type>sources</type>
+      </dependency>
+      <dependency>
+        <groupId>ai.timefold.solver.advanced</groupId>
+        <artifactId>timefold-solver-advanced-core</artifactId>
+        <version>${version.ai.timefold.solver}</version>
+        <type>test-jar</type>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+</project>
