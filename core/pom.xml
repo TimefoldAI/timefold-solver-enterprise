@@ -12,7 +12,7 @@
 
   <artifactId>timefold-solver-advanced-core</artifactId>
 
-  <name>Timefold Solver Advanced Edition core</name>
+  <name>Timefold Solver Advanced Edition Core</name>
   <description>
     Timefold solves planning problems.
     This lightweight, embeddable planning engine implements powerful and scalable algorithms

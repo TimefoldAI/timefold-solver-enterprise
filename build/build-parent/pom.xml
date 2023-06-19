@@ -13,7 +13,7 @@
   <artifactId>timefold-solver-advanced-build-parent</artifactId>
   <packaging>pom</packaging>
 
-  <name>Timefold Solver Advanced Edition build parent</name>
+  <name>Timefold Solver Advanced Edition Build parent</name>
 
   <properties>
     <!-- ************************************************************************ -->

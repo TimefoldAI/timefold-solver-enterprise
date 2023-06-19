@@ -24,6 +24,7 @@
         <module>build/build-parent</module>
         <module>core</module>
         <module>quarkus</module>
+        <module>spring-boot</module>
     </modules>
 
     <profiles>

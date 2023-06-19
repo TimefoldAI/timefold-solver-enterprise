@@ -59,6 +59,11 @@
         <artifactId>timefold-solver-advanced-quarkus</artifactId>
         <version>${version.ai.timefold.solver}</version>
       </dependency>
+      <dependency>
+        <groupId>ai.timefold.solver.advanced</groupId>
+        <artifactId>timefold-solver-advanced-spring-boot-starter</artifactId>
+        <version>${version.ai.timefold.solver}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
