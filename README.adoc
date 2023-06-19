@@ -6,7 +6,7 @@
 :branch: main
 
 **WARNING: This repo is currently in flux, and the Maven project structure is still likely to change.
-Until Timefold Solver 1.0.0 is released, please do not depend on these artifacts.**
+Until Timefold Solver 1.0.0 is released, do not depend on these artifacts.**
 
 _Planning optimization made easy._ +
 https://timefold.ai[timefold.ai]
