@@ -7,6 +7,15 @@ assignees: ''
 
 ---
 
+---
+name: Bug report
+about: Create a report to help us improve.
+title: ''
+labels: bug, needs triage
+assignees: ''
+
+---
+
 **Describe the bug**
 Describe the issue you are experiencing here.
 Tell us what you were trying to do and what happened.
