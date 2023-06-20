@@ -1,0 +1,43 @@
+name: Turtle Tests
+
+on:
+  schedule:
+    -cron: '0 2 * * 6' # Every Saturday at 2am UTC
+
+jobs:
+  test:
+    concurrency:
+      group: turtle-${{ matrix.example }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        example: [cloudbalancing, conferencescheduling, curriculumcourse, examination, flightcrewscheduling, machinereassignment, meetingscheduling, nqueens, nurserostering, pas, projectjobscheduling, taskassigning, tennis, travelingtournament, tsp, vehiclerouting]
+    steps:
+      - name: Checkout timefold-solver
+        uses: actions/checkout@v3
+        with:
+          path: './timefold-solver'
+          repository: 'TimefoldAI/timefold-solver'
+      - name: Checkout timefold-solver-enterprise
+        uses: actions/checkout@v3
+        with:
+          path: './timefold-solver-enterprise'
+          repository: 'TimefoldAI/timefold-solver-enterprise'
+
+      # Build and test
+      - name: "Setup Java and Maven"
+        uses: actions/setup-java@v3
+        with:
+          java-version: 17
+          distribution: 'temurin'
+          cache: 'maven'
+      - name: Quickly build timefold-solver
+        working-directory: ./timefold-solver
+        run: mvn -B -Dquickly clean install
+      - name: Copy example data to where expected
+        working-directory: ./timefold-solver-enterprise
+        run: cp -r ../timefold-solver/examples/data core/
+      - name: Run turtle test
+        working-directory: ./timefold-solver-enterprise
+        run: mvn -B -Dai.timefold.solver.examples.turtle=${{matrix.example}} test
