@@ -2,7 +2,7 @@ name: Turtle Tests
 
 on:
   schedule:
-    -cron: '0 2 * * 6' # Every Saturday at 2am UTC
+    - cron: '0 2 * * 6' # Every Saturday at 2am UTC
 
 jobs:
   test:
