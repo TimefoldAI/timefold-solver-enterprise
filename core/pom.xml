@@ -85,6 +85,62 @@
     </dependency>
   </dependencies>
 
+  <profiles>
+    <profile>
+      <!--
+        Runs turtle tests from the Community Edition repo,
+        with the Enterprise Edition features enabled.
+        -->
+      <id>turtleTest</id>
+      <activation>
+        <property>
+          <name>ai.timefold.solver.examples.turtle</name>
+        </property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>ai.timefold.solver</groupId>
+          <artifactId>timefold-solver-test</artifactId>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>ai.timefold.solver</groupId>
+          <artifactId>timefold-solver-examples</artifactId>
+        </dependency>
+        <dependency>
+          <groupId>ai.timefold.solver</groupId>
+          <artifactId>timefold-solver-examples</artifactId>
+          <type>test-jar</type>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <!--
+                ParallelGC improves throughput, speeding up the solver.
+                Xmx4g gives the solver enough memory for large datasets on 2 threads.
+                -->
+              <argLine>-XX:+UseParallelGC -Xmx4g</argLine>
+              <dependenciesToScan>
+                <dependency>ai.timefold.solver:timefold-solver-examples:*:tests</dependency>
+              </dependenciesToScan>
+              <!--
+                We only run what is marked as a turtle test,
+                ignoring most tests from the package.
+                -->
+              <includes>
+                <include>**/*TurtleTest.java</include>
+              </includes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+
   <build>
     <plugins>
       <plugin>
