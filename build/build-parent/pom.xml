@@ -17,15 +17,8 @@
 
   <properties>
     <!-- ************************************************************************ -->
-    <!-- Dependencies -->
-    <!-- ************************************************************************ -->
-    <version.ch.qos.logback>1.4.8</version.ch.qos.logback>
-
-    <!-- ************************************************************************ -->
     <!-- Plugins -->
     <!-- ************************************************************************ -->
-    <version.asciidoctor.plugin>2.2.4</version.asciidoctor.plugin>
-    <version.assembly.plugin>3.6.0</version.assembly.plugin>
     <version.compiler.plugin>3.11.0</version.compiler.plugin>
     <version.dependency.plugin>3.6.0</version.dependency.plugin>
     <version.enforcer.plugin>3.3.0</version.enforcer.plugin>
@@ -42,7 +35,6 @@
     <version.sonar.plugin>3.9.1.2184</version.sonar.plugin>
     <version.source.plugin>3.3.0</version.source.plugin>
     <version.surefire.plugin>3.1.2</version.surefire.plugin>
-    <version.versions.plugin>2.16.0</version.versions.plugin>
 
     <!-- Plugin configuration properties -->
     <maven.min.version>3.9.2</maven.min.version>
@@ -69,6 +61,21 @@
       <dependency>
         <groupId>ai.timefold.solver.enterprise</groupId>
         <artifactId>timefold-solver-enterprise-bom</artifactId>
+        <version>${project.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <!--
+        This will only inherit dependency management, not plugin management.
+        If we wanted to include plugin management,
+        we would need to extend Community Edition's build parent.
+        We do not want that, as that would likely adversely affect the BOM too.
+        Duplicating plugin configuration is arguably not a big deal,
+        as opposed to duplicating dependency configuration.
+      -->
+      <dependency>
+        <groupId>ai.timefold.solver</groupId>
+        <artifactId>timefold-solver-build-parent</artifactId>
         <version>${project.version}</version>
         <type>pom</type>
         <scope>import</scope>
@@ -205,7 +212,7 @@
           <artifactId>maven-resources-plugin</artifactId>
           <version>${version.resources.plugin}</version>
           <configuration>
-            <encoding>UTF-8</encoding>
+            <encoding>${project.build.sourceEncoding}</encoding>
           </configuration>
         </plugin>
         <!-- Packaging -->
@@ -254,18 +261,6 @@
         <plugin>
           <artifactId>maven-source-plugin</artifactId>
           <version>${version.source.plugin}</version>
-          <configuration>
-            <excludes>
-              <!-- The JAXB nor XSD artifacts should not appear in the sources JAR either (see the maven-jar-plugin). -->
-              <exclude>META-INF/JAXB/</exclude>
-              <exclude>${schema.filename.benchmark}</exclude>
-            </excludes>
-          </configuration>
-        </plugin>
-        <plugin>
-          <groupId>org.codehaus.mojo</groupId>
-          <artifactId>versions-maven-plugin</artifactId>
-          <version>${version.versions.plugin}</version>
         </plugin>
         <plugin>
           <artifactId>maven-javadoc-plugin</artifactId>
