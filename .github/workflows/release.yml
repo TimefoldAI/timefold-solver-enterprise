@@ -26,9 +26,33 @@ on:
 jobs:
   build:
     env:
-      MAVEN_OPTS: "--no-transfer-progress --batch-mode"
+      MAVEN_ARGS: "--no-transfer-progress --batch-mode"
     runs-on: ubuntu-latest
     steps:
+      - name: Print inputs to the release workflow
+        run: echo "${{ toJSON(github.event.inputs) }}"
+      - name: Checkout the relevant timefold-solver tag
+        uses: actions/checkout@v3
+        with:
+          repository: "TimefoldAI/timefold-solver"
+          path: "./timefold-solver"
+          fetch-depth: 0
+          ref: v${{ github.event.inputs.version }}
+
+      - uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # No need to wait for the upstream release to show up in Maven Central.
+      - name: Build the upstream release tag
+        working-directory: "./timefold-solver"
+        run: |
+          mvn -Dquickly install
+          cd ..
+          rm -rf timefold-solver
+
       - name: Checkout timefold-solver-enterprise
         uses: actions/checkout@v3
         with:
@@ -40,24 +64,16 @@ jobs:
           git config user.email "release@timefold.ai"
           git checkout -b ${{ github.event.inputs.releaseBranch }}
 
-      - uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'maven'
-
       # We skip tests in dry run, to make the process faster.
       # Technically, this goes against the main reason for doing a dry run; to eliminate potential problems.
       # But unless something catastrophic happened, PR checks on source branch already ensured that all tests pass.
+      # We also do not use versions:set, because we'd have to have the SNAPSHOT version built from somewhere,
+      # and at this point in the release, there is no upstream branch anywhere that would have this version anymore.
       - name: Set release version and build release
         run: |
-          mvn ${{ env.MAVEN_OPTS }} -Dfull versions:set -DnewVersion=${{ github.event.inputs.version }}
-          mvn ${{ env.MAVEN_OPTS }} -Dfull deploy -DskipTests=${{ github.event.inputs.dryRun }} -DaltDeploymentRepository=local::default::file://`pwd`/target/staging-deploy
-
-      - name: Update release branch and commit the changes
-        run: |
-          find . -name 'pom.xml' | xargs git add
-          git commit -m "chore: release version ${{ github.event.inputs.version }}"
+          export NEW_VERSION=${{ github.event.inputs.version }}
+          .github/scripts/change_versions.sh
+          mvn -Dfull deploy -DskipTests=${{ github.event.inputs.dryRun }} -DaltDeploymentRepository=local::default::file://`pwd`/target/staging-deploy
 
       # JReleaser requires the release branch to exist, so we need to push it before releasing.
       # Once this is pushed, branch protection rules apply.
@@ -70,7 +86,8 @@ jobs:
       - name: Run JReleaser
         uses: jreleaser/release-action@v2
         env:
-          JRELEASER_GITHUB_USERNAME: "timefold-release"
+          JRELEASER_DRY_RUN: ${{ github.event.inputs.dryRun }}
+          JRELEASER_PROJECT_VERSION: ${{ github.event.inputs.version }}
           JRELEASER_GITHUB_TOKEN: ${{ secrets.JRELEASER_GITHUB_TOKEN }}
           JRELEASER_GPG_PASSPHRASE: ${{ secrets.JRELEASER_GPG_PASSPHRASE }}
           JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.JRELEASER_GPG_PUBLIC_KEY }}
@@ -87,21 +104,17 @@ jobs:
 
       - name: Set micro snapshot version on the release branch
         run: |
-          mvn ${{ env.MAVEN_OPTS }} -Dfull versions:set -DnewVersion=${{ github.event.inputs.nextMicroVersion }}-SNAPSHOT
-          find . -name 'pom.xml' | xargs git add
-          git commit -m "chore: move to ${{ github.event.inputs.nextMicroVersion }}-SNAPSHOT"
+          export NEW_VERSION="${{ github.event.inputs.nextMicroVersion }}-SNAPSHOT"
+          .github/scripts/change_versions.sh
 
+      # We do not use versions:set, because we'd have to have the SNAPSHOT version built from somewhere,
+      # and at this point in the release, there is no upstream branch anywhere that would have this version anymore.
       - name: Switch back to source branch and set snapshot version
         run: |
           git checkout ${{ github.event.inputs.sourceBranch }}
           git checkout -B ${{ github.event.inputs.releaseBranch }}-bump
-          mvn ${{ env.MAVEN_OPTS }} -Dfull versions:set -DnewVersion=${{ github.event.inputs.nextVersion }}-SNAPSHOT
-          mvn ${{ env.MAVEN_OPTS }} -Dfull verify -DskipTests=true 
-
-      - name: Update source branch and commit
-        run: |
-          find . -name 'pom.xml' | xargs git add
-          git commit -m "chore: move to ${{ github.event.inputs.nextVersion }}-SNAPSHOT"
+          export NEW_VERSION="${{ github.event.inputs.nextVersion }}-SNAPSHOT"
+          .github/scripts/change_versions.sh
 
       # JReleaser should push the tag on its own, but it does not due to a bug.
       # https://github.com/jreleaser/jreleaser/issues/1425
@@ -117,4 +130,4 @@ jobs:
         run: |
           gh pr create --reviewer triceo,ge0ffrey --base ${{ github.event.inputs.sourceBranch }} --head ${{ github.event.inputs.releaseBranch }}-bump --title "chore: move to ${{ github.event.inputs.nextVersion }}-SNAPSHOT" --body-file .github/workflows/release-pr-body.md
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.JRELEASER_GITHUB_TOKEN }}
