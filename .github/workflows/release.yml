@@ -26,9 +26,31 @@ on:
 jobs:
   build:
     env:
-      MAVEN_OPTS: "--no-transfer-progress --batch-mode"
+      MAVEN_ARGS: "--no-transfer-progress --batch-mode"
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout the relevant timefold-solver tag
+        uses: actions/checkout@v3
+        with:
+          repository: "TimefoldAI/timefold-solver"
+          path: "./timefold-solver"
+          fetch-depth: 0
+          ref: v${{ github.event.inputs.version }}
+
+      - uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      # No need to wait for the upstream release to show up in Maven Central.
+      - name: Build the upstream release tag
+        working-directory: "./timefold-solver"
+        run: |
+          mvn -Dquickly install
+          cd ..
+          rm -rf timefold-solver
+
       - name: Checkout timefold-solver-enterprise
         uses: actions/checkout@v3
         with:
@@ -40,19 +62,21 @@ jobs:
           git config user.email "release@timefold.ai"
           git checkout -b ${{ github.event.inputs.releaseBranch }}
 
-      - uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'maven'
-
       # We skip tests in dry run, to make the process faster.
       # Technically, this goes against the main reason for doing a dry run; to eliminate potential problems.
       # But unless something catastrophic happened, PR checks on source branch already ensured that all tests pass.
+      # We also do not use versions:set, because we'd have to have the SNAPSHOT version built from somewhere,
+      # and at this point in the release, there is no upstream branch anywhere that would have this version anymore.
       - name: Set release version and build release
         run: |
-          mvn ${{ env.MAVEN_OPTS }} -Dfull versions:set -DnewVersion=${{ github.event.inputs.version }}
-          mvn ${{ env.MAVEN_OPTS }} -Dfull deploy -DskipTests=${{ github.event.inputs.dryRun }} -DaltDeploymentRepository=local::default::file://`pwd`/target/staging-deploy
+          DETECTED_VERSION=$(mvn -q \
+            -Dexec.executable="echo" \
+            -Dexec.args='${project.version}' \
+            --non-recursive \
+            org.codehaus.mojo:exec-maven-plugin:1.6.0:exec \
+          )
+          find -name "pom.xml" | xargs sed -i "s/$DETECTED_VERSION/${{ github.event.inputs.version }}/g"
+          mvn -Dfull deploy -DskipTests=${{ github.event.inputs.dryRun }} -DaltDeploymentRepository=local::default::file://`pwd`/target/staging-deploy
 
       - name: Update release branch and commit the changes
         run: |
@@ -70,6 +94,8 @@ jobs:
       - name: Run JReleaser
         uses: jreleaser/release-action@v2
         env:
+          JRELEASER_DRY_RUN: ${{ github.event.inputs.dryRun }}
+          JRELEASER_PROJECT_VERSION: ${{ github.event.inputs.version }}
           JRELEASER_GITHUB_USERNAME: "timefold-release"
           JRELEASER_GITHUB_TOKEN: ${{ secrets.JRELEASER_GITHUB_TOKEN }}
           JRELEASER_GPG_PASSPHRASE: ${{ secrets.JRELEASER_GPG_PASSPHRASE }}
@@ -87,16 +113,24 @@ jobs:
 
       - name: Set micro snapshot version on the release branch
         run: |
-          mvn ${{ env.MAVEN_OPTS }} -Dfull versions:set -DnewVersion=${{ github.event.inputs.nextMicroVersion }}-SNAPSHOT
+          mvn -Dfull versions:set -DnewVersion=${{ github.event.inputs.nextMicroVersion }}-SNAPSHOT
           find . -name 'pom.xml' | xargs git add
           git commit -m "chore: move to ${{ github.event.inputs.nextMicroVersion }}-SNAPSHOT"
 
+      # We do not use versions:set, because we'd have to have the SNAPSHOT version built from somewhere,
+      # and at this point in the release, there is no upstream branch anywhere that would have this version anymore.
       - name: Switch back to source branch and set snapshot version
         run: |
           git checkout ${{ github.event.inputs.sourceBranch }}
           git checkout -B ${{ github.event.inputs.releaseBranch }}-bump
-          mvn ${{ env.MAVEN_OPTS }} -Dfull versions:set -DnewVersion=${{ github.event.inputs.nextVersion }}-SNAPSHOT
-          mvn ${{ env.MAVEN_OPTS }} -Dfull verify -DskipTests=true 
+          DETECTED_VERSION=$(mvn -q \
+            -Dexec.executable="echo" \
+            -Dexec.args='${project.version}' \
+            --non-recursive \
+            org.codehaus.mojo:exec-maven-plugin:1.6.0:exec \
+          )
+          find -name "pom.xml" | xargs sed -i "s/$DETECTED_VERSION/${{ github.event.inputs.version }}/g"
+          mvn -Dquickly install 
 
       - name: Update source branch and commit
         run: |
