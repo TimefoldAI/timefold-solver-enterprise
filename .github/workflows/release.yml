@@ -45,6 +45,11 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@v4.5
+        with:
+          maven-version: 3.9.3
+
       # No need to wait for the upstream release to show up in Maven Central.
       - name: Build the upstream release tag
         working-directory: "./timefold-solver"
@@ -116,13 +121,11 @@ jobs:
           export NEW_VERSION="${{ github.event.inputs.nextVersion }}-SNAPSHOT"
           .github/scripts/change_versions.sh
 
-      # JReleaser should push the tag on its own, but it does not due to a bug.
-      # https://github.com/jreleaser/jreleaser/issues/1425
+      # JReleaser will push the tag; but it will only become visible once the release is undrafted.
       - name: Push branches to git
         run: |
           git push origin ${{ github.event.inputs.releaseBranch }}
           git push origin ${{ github.event.inputs.releaseBranch }}-bump
-          git push origin --tags
 
       # There are some follow-up steps to continue the release.
       # They will be listed in the PR body.
