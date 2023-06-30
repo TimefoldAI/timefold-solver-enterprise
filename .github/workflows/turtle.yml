@@ -40,4 +40,4 @@ jobs:
         run: cp -r ../timefold-solver/examples/data core/
       - name: Run turtle test
         working-directory: ./timefold-solver-enterprise
-        run: mvn -B -Dai.timefold.solver.examples.turtle=${{matrix.example}} test
+        run: mvn -B -Dai.timefold.solver.examples.turtle=${{matrix.example}} -Dai.timefold.solver.examples.turtle.runTimeLimitMinutes=300 test
