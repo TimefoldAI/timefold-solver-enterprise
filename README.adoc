@@ -30,8 +30,32 @@ The Community Edition is a free and open source project, licensed under the Apac
 
 == Using Timefold Solver Enterprise Edition
 
-To use _Timefold Solver Enterprise Edition_,
-first configure your Maven project to use the Enterprise Edition Maven repository:
+To use Timefold Solver Enterprise Edition, first https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens[create a GitHub access token] with the `read:packages` permission.
+
+NOTE: In the near future, we will introduce anonymous access to _Timefold Solver Enterprise Edition_ packages. This step will no longer be required.
+
+=== Step 1a: Using Timefold Solver Enterprise Edition in Maven
+
+. Configure Maven to use the GitHub access token
++
+Edit the existing or create a new `settings.xml` in `~/.m2` to add server authentication:
++
+[source, xml]
+----
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <servers>
+    <server>
+      <id>timefold-solver-enterprise</id>
+      <username>GitHub user name</username>
+      <password>GitHub token</password>
+    </server>
+  </servers>
+</settings>
+----
+
+. Configure your Maven project to use the Enterprise Edition Maven repository:
 
     <project>
       ...
@@ -44,16 +68,28 @@ first configure your Maven project to use the Enterprise Edition Maven repositor
       </repositories>
       ...
     </project>
++
+Note that the repository `ID` is the same as the server `ID` from the previous step.
 
-Similarly in Gradle:
+=== Step 1b: Using Timefold Solver Enterprise Edition with Gradle
+
+Configure your Gradle project to use the Enterprise Edition Maven repository:
 
     repositories {
       mavenCentral()
       maven {
         url "https://maven.pkg.github.com/TimefoldAI/timefold-solver-enterprise"
+        credentials {
+            username = "GitHub user name"
+            password = "GitHub token"
+        }
+        authentication {
+            basic(BasicAuthentication)
+        }
       }
     }
 
+=== Step 2: Replace Community Edition artifacts
 Having done that, replace the following artifacts provided by the Community Edition with their Enterprise Edition counterparts:
 
 |===
