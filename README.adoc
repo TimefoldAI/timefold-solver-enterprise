@@ -23,7 +23,7 @@ Even though the source code is available here, *_Timefold Solver Enterprise Edit
 You are not allowed to modify, distribute, or use this source code and resulting binaries
 for any purpose other than for development and testing.
 *To use _Timefold Solver Enterprise Edition_ in production, you need a license.*
-https://timefold.ai/company/contact[Contact Timefold sales] to obtain one.
+https://timefold.ai/pricing/[See Timefold pricing information.]
 
 Users who do not require the additional features are encouraged to use the https://github.com/TimefoldAI/timefold-solver/[_Timefold Solver Community Edition_] instead.
 The Community Edition is a free and open source project, licensed under the Apache License 2.0.
