@@ -88,6 +88,7 @@ Configure your Gradle project to use the Enterprise Edition Maven repository:
         }
       }
     }
+
 === Step 2: Replace Community Edition artifacts
 Having done that, replace the following artifacts provided by the Community Edition with their Enterprise Edition counterparts:
 
