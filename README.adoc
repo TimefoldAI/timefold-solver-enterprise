@@ -45,7 +45,7 @@ first configure your Maven project to use the Enterprise Edition Maven repositor
       ...
     </project>
 
-Similary in Gradle:
+Similarly in Gradle:
 
     repositories {
       mavenCentral()
