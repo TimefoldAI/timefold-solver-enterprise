@@ -37,8 +37,12 @@ class OrderByMoveIndexBlockingQueueTest {
     @Test
     void addMove() throws InterruptedException {
         // Capacity: 4 moves in circulation + 2 exception handling results
-        OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(4 + 2);
+        int threadCount = 2;
+        OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(threadCount, 4 + 2);
 
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(queue::waitForDecider);
+        }
         queue.startNextStep(0);
         executorService.submit(() -> queue.addMove(0, 0, 0, new DummyMove("a0"), SimpleScore.of(-100)));
         executorService.submit(() -> queue.addMove(1, 0, 1, new DummyMove("a1"), SimpleScore.of(-1000)));
@@ -59,6 +63,9 @@ class OrderByMoveIndexBlockingQueueTest {
         assertResult("a6", -6, queue.take());
         executorService.submit(() -> queue.addMove(1, 0, 10, new DummyMove("a10"), SimpleScore.of(-10)));
 
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(queue::waitForDecider);
+        }
         queue.startNextStep(1);
         executorService.submit(() -> queue.addMove(0, 1, 0, new DummyMove("b0"), SimpleScore.of(0)));
         executorService.submit(() -> queue.addMove(1, 0, 11, new DummyMove("a11"), SimpleScore.of(-11)));
@@ -69,6 +76,9 @@ class OrderByMoveIndexBlockingQueueTest {
         assertResult("b1", -1, queue.take());
         executorService.submit(() -> queue.addMove(0, 1, 4, new DummyMove("b4"), SimpleScore.of(-4)));
 
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(queue::waitForDecider);
+        }
         queue.startNextStep(2);
         executorService.submit(() -> queue.addMove(1, 2, 2, new DummyMove("c2"), SimpleScore.of(-2)));
         executorService.submit(() -> queue.addMove(1, 2, 1, new DummyMove("c1"), SimpleScore.of(-1)));
@@ -81,8 +91,12 @@ class OrderByMoveIndexBlockingQueueTest {
     @Test
     void addUndoableMove() throws InterruptedException {
         // Capacity: 4 moves in circulation + 2 exception handling results
-        OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(4 + 2);
+        int threadCount = 2;
+        OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(threadCount, 4 + 2);
 
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(queue::waitForDecider);
+        }
         queue.startNextStep(0);
         executorService.submit(() -> queue.addUndoableMove(0, 0, 0, new DummyMove("a0")));
         executorService.submit(() -> queue.addUndoableMove(1, 0, 3, new DummyMove("a3")));
@@ -92,6 +106,9 @@ class OrderByMoveIndexBlockingQueueTest {
         assertResult("a1", -1, queue.take());
         assertResult("a2", false, queue.take());
 
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(queue::waitForDecider);
+        }
         queue.startNextStep(1);
         executorService.submit(() -> queue.addMove(0, 1, 1, new DummyMove("b1"), SimpleScore.of(-1)));
         executorService.submit(() -> queue.addUndoableMove(1, 0, 4, new DummyMove("a4")));
@@ -103,8 +120,12 @@ class OrderByMoveIndexBlockingQueueTest {
     @Test
     void addExceptionThrown() throws InterruptedException, ExecutionException {
         // Capacity: 4 moves in circulation + 2 exception handling results
-        OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(4 + 2);
+        int threadCount = 2;
+        OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(threadCount, 4 + 2);
 
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(queue::waitForDecider);
+        }
         queue.startNextStep(0);
         executorService.submit(() -> queue.addMove(0, 0, 1, new DummyMove("a1"), SimpleScore.of(-1)));
         executorService.submit(() -> queue.addMove(1, 0, 0, new DummyMove("a0"), SimpleScore.of(0)));
@@ -114,6 +135,9 @@ class OrderByMoveIndexBlockingQueueTest {
         assertResult("a1", -1, queue.take());
         assertResult("a2", -2, queue.take());
 
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(queue::waitForDecider);
+        }
         queue.startNextStep(1);
 
         CountDownLatch allPrecedingTasksFinished = new CountDownLatch(3);
@@ -130,21 +154,25 @@ class OrderByMoveIndexBlockingQueueTest {
             allPrecedingTasksFinished.countDown();
         });
         allPrecedingTasksFinished.await();
-
         IllegalArgumentException exception = new IllegalArgumentException();
-        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(1, exception));
+        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(3, exception));
         exceptionFuture.get(); // Avoid random failing test when the task hasn't started yet or the next task finishes earlier
         executorService.submit(() -> queue.addMove(0, 1, 2, new DummyMove("b2"), SimpleScore.of(-2))).get();
         assertResult("b0", false, queue.take());
         assertResult("b1", -1, queue.take());
+        assertResult("b2", -2, queue.take());
         assertThatThrownBy(queue::take).hasCause(exception);
     }
 
     @Test
     void addExceptionIsNotEatenIfNextStepStartsBeforeTaken() throws InterruptedException, ExecutionException {
         // Capacity: 4 moves in circulation + 2 exception handling results
-        OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(4 + 2);
+        int threadCount = 2;
+        OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(threadCount, 4 + 2);
 
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(queue::waitForDecider);
+        }
         queue.startNextStep(0);
         executorService.submit(() -> queue.addMove(0, 0, 1, new DummyMove("a1"), SimpleScore.of(-1)));
         executorService.submit(() -> queue.addMove(1, 0, 0, new DummyMove("a0"), SimpleScore.of(0)));

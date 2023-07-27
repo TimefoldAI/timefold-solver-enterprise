@@ -1,9 +1,9 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import ai.timefold.solver.core.api.score.Score;
 import ai.timefold.solver.core.impl.heuristic.move.Move;
@@ -24,6 +24,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
     private final BlockingQueue<MoveThreadOperation<Solution_>> operationQueue;
     private final OrderByMoveIndexBlockingQueue<Solution_> resultQueue;
     private final CyclicBarrier moveThreadBarrier;
+    private final AtomicInteger moveIndex;
+    private final AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference;
 
     private final boolean assertMoveScoreFromScratch;
     private final boolean assertExpectedUndoMoveScore;
@@ -32,12 +34,14 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
     private final boolean assertShadowVariablesAreNotStaleAfterStep;
 
     private InnerScoreDirector<Solution_, Score_> scoreDirector = null;
-    private AtomicLong calculationCount = new AtomicLong(-1);
+    private final AtomicLong calculationCount = new AtomicLong(-1);
 
     public MoveThreadRunner(String logIndentation, int moveThreadIndex, boolean evaluateDoable,
             BlockingQueue<MoveThreadOperation<Solution_>> operationQueue,
             OrderByMoveIndexBlockingQueue<Solution_> resultQueue,
             CyclicBarrier moveThreadBarrier,
+            AtomicInteger moveIndex,
+            AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference,
             boolean assertMoveScoreFromScratch, boolean assertExpectedUndoMoveScore,
             boolean assertStepScoreFromScratch, boolean assertExpectedStepScore,
             boolean assertShadowVariablesAreNotStaleAfterStep) {
@@ -47,6 +51,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
         this.operationQueue = operationQueue;
         this.resultQueue = resultQueue;
         this.moveThreadBarrier = moveThreadBarrier;
+        this.moveIndex = moveIndex;
+        this.iteratorReference = iteratorReference;
         this.assertMoveScoreFromScratch = assertMoveScoreFromScratch;
         this.assertExpectedUndoMoveScore = assertExpectedUndoMoveScore;
         this.assertStepScoreFromScratch = assertStepScoreFromScratch;
@@ -56,19 +62,29 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
 
     @Override
     public void run() {
+        int generatedMoveIndex = -1;
         try {
             int stepIndex = -1;
             Score_ lastStepScore = null;
+            resultQueue.waitForDecider();
+            // Wait for the iteratorLock to be available before entering the loop
             while (true) {
                 MoveThreadOperation<Solution_> operation;
                 try {
-                    operation = operationQueue.take();
+                    if (!operationQueue.isEmpty()) {
+                        operation = operationQueue.take();
+                    } else {
+                        generatedMoveIndex = moveIndex.getAndIncrement();
+                        NeverEndingMoveGenerator<Solution_> neverEndingMoveGenerator = iteratorReference.get(generatedMoveIndex % iteratorReference.length());
+                        operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex, neverEndingMoveGenerator.generateNextMove());
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
                 }
 
                 if (operation instanceof SetupOperation) {
+                    // Cannot be replaced by pattern variable; "cannot be safely cast" because of parameterization
                     SetupOperation<Solution_, Score_> setupOperation = (SetupOperation<Solution_, Score_>) operation;
                     scoreDirector = setupOperation.getScoreDirector()
                             .createChildThreadScoreDirector(ChildThreadType.MOVE_THREAD);
@@ -92,8 +108,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                     // TODO Performance gain with specialized 2-phase cyclic barrier:
                     // As soon as the last move thread has taken its ApplyStepOperation,
                     // other move threads can already depart from the moveThreadStepBarrier: no need to wait until the step is done.
-                    ApplyStepOperation<Solution_, Score_> applyStepOperation =
-                            (ApplyStepOperation<Solution_, Score_>) operation;
+                    // Cannot be replaced by pattern variable; "cannot be safely cast" because of parameterization
+                    ApplyStepOperation<Solution_, Score_> applyStepOperation = (ApplyStepOperation<Solution_, Score_>) operation;
                     if (stepIndex + 1 != applyStepOperation.getStepIndex()) {
                         throw new IllegalStateException("Impossible situation: the moveThread's stepIndex (" + stepIndex
                                 + ") is not followed by the operation's stepIndex ("
@@ -114,8 +130,7 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                         Thread.currentThread().interrupt();
                         break;
                     }
-                } else if (operation instanceof MoveEvaluationOperation) {
-                    MoveEvaluationOperation<Solution_> moveEvaluationOperation = (MoveEvaluationOperation<Solution_>) operation;
+                } else if (operation instanceof MoveEvaluationOperation<Solution_> moveEvaluationOperation) {
                     int moveIndex = moveEvaluationOperation.getMoveIndex();
                     if (stepIndex != moveEvaluationOperation.getStepIndex()) {
                         throw new IllegalStateException("Impossible situation: the moveThread's stepIndex ("
@@ -149,7 +164,7 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
             // in the resultQueue in order to be propagated to the solver thread.
             LOGGER.trace("{}            Move thread ({}) exception that will be propagated to the solver thread.",
                     logIndentation, moveThreadIndex, throwable);
-            resultQueue.addExceptionThrown(moveThreadIndex, throwable);
+            resultQueue.addExceptionThrown(generatedMoveIndex == -1? moveThreadIndex : generatedMoveIndex, throwable);
         } finally {
             if (scoreDirector != null) {
                 scoreDirector.close();
@@ -157,7 +172,7 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
         }
     }
 
-    protected void predictWorkingStepScore(Move<Solution_> step, Score_ score) {
+    void predictWorkingStepScore(Move<Solution_> step, Score_ score) {
         // There is no need to recalculate the score, but we still need to set it
         scoreDirector.getSolutionDescriptor().setScore(scoreDirector.getWorkingSolution(), score);
         if (assertStepScoreFromScratch) {

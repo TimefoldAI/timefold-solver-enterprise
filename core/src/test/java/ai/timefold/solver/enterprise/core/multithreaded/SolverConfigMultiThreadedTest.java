@@ -25,7 +25,6 @@ class SolverConfigMultiThreadedTest {
         runSolvingAndVerifySolution(10, 20, "256");
     }
 
-    @Disabled("PLANNER-1180")
     @Test
     @Timeout(5)
     void solvingOfVerySmallProblemFinishes() {
