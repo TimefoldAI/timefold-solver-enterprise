@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -134,6 +135,7 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
 
         int selectMoveIndex = 0;
         AtomicLong hasNextRemaining;
+        AtomicBoolean hasNextShared;
         Semaphore waitForDeciderSemaphore;
         Iterator<Move<Solution_>> sharedIterator;
         boolean useSemaphore = true;
@@ -141,10 +143,11 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
             // TODO: Code for split move selectors
         } else {
             hasNextRemaining = new AtomicLong(1);
+            hasNextShared = new AtomicBoolean(true);
             waitForDeciderSemaphore = new Semaphore(selectedMoveBufferSize);
             sharedIterator = placement.iterator();
             SharedNeverEndingMoveGenerator<Solution_> sharedGenerator = new SharedNeverEndingMoveGenerator<>(hasNextRemaining,
-                    resultQueue, sharedIterator, waitForDeciderSemaphore);
+                    resultQueue, sharedIterator, waitForDeciderSemaphore, hasNextShared);
             for (int i = 0; i < moveThreadCount; i++) {
                 iteratorReference.set(i, sharedGenerator);
             }
@@ -162,13 +165,19 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
         }
 
         // Do not evaluate the remaining selected moves for this step that haven't started evaluation yet
+        int remainingPermits = 0;
         resultQueue.blockMoveThreads();
+        if (useSemaphore) {
+            remainingPermits = waitForDeciderSemaphore.drainPermits();
+            hasNextShared.setRelease(false);
+            waitForDeciderSemaphore.release(selectedMoveBufferSize);
+        }
 
         pickMove(stepScope);
         // Start doing the step on every move thread. Don't wait for the stepEnded() event.
         resultQueue.deciderSyncOnEnd();
         if (useSemaphore) {
-            for (int i = 0; i < waitForDeciderSemaphore.availablePermits(); i++) {
+            for (int i = 0; i < remainingPermits; i++) {
                 if (!sharedIterator.hasNext()) {
                     break;
                 }
