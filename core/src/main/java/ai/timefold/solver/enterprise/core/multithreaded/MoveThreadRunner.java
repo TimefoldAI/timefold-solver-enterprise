@@ -77,8 +77,11 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                         generatedMoveIndex = moveIndex.getAndIncrement();
                         NeverEndingMoveGenerator<Solution_> neverEndingMoveGenerator =
                                 iteratorReference.get(generatedMoveIndex % iteratorReference.length());
-                        operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex,
-                                neverEndingMoveGenerator.generateNextMove());
+                        synchronized (neverEndingMoveGenerator) {
+                            generatedMoveIndex = neverEndingMoveGenerator.getNextMoveIndex();
+                            operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex,
+                                    neverEndingMoveGenerator.generateNextMove());
+                        }
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
