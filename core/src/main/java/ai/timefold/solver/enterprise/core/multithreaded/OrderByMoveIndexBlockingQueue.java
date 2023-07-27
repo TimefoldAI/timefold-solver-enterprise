@@ -216,7 +216,6 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
         }
     }
 
-
     public boolean checkIfBlocking() {
         return syncDeciderAndMoveThreads.getAcquire();
     }

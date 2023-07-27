@@ -75,8 +75,13 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                         operation = operationQueue.take();
                     } else {
                         generatedMoveIndex = moveIndex.getAndIncrement();
-                        NeverEndingMoveGenerator<Solution_> neverEndingMoveGenerator = iteratorReference.get(generatedMoveIndex % iteratorReference.length());
-                        operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex, neverEndingMoveGenerator.generateNextMove());
+                        NeverEndingMoveGenerator<Solution_> neverEndingMoveGenerator =
+                                iteratorReference.get(generatedMoveIndex % iteratorReference.length());
+                        synchronized (neverEndingMoveGenerator) {
+                            generatedMoveIndex = neverEndingMoveGenerator.getNextMoveIndex();
+                            operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex,
+                                    neverEndingMoveGenerator.generateNextMove());
+                        }
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -109,7 +114,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                     // As soon as the last move thread has taken its ApplyStepOperation,
                     // other move threads can already depart from the moveThreadStepBarrier: no need to wait until the step is done.
                     // Cannot be replaced by pattern variable; "cannot be safely cast" because of parameterization
-                    ApplyStepOperation<Solution_, Score_> applyStepOperation = (ApplyStepOperation<Solution_, Score_>) operation;
+                    ApplyStepOperation<Solution_, Score_> applyStepOperation =
+                            (ApplyStepOperation<Solution_, Score_>) operation;
                     if (stepIndex + 1 != applyStepOperation.getStepIndex()) {
                         throw new IllegalStateException("Impossible situation: the moveThread's stepIndex (" + stepIndex
                                 + ") is not followed by the operation's stepIndex ("
@@ -164,7 +170,7 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
             // in the resultQueue in order to be propagated to the solver thread.
             LOGGER.trace("{}            Move thread ({}) exception that will be propagated to the solver thread.",
                     logIndentation, moveThreadIndex, throwable);
-            resultQueue.addExceptionThrown(generatedMoveIndex == -1? moveThreadIndex : generatedMoveIndex, throwable);
+            resultQueue.addExceptionThrown(generatedMoveIndex == -1 ? moveThreadIndex : generatedMoveIndex, throwable);
         } finally {
             if (scoreDirector != null) {
                 scoreDirector.close();

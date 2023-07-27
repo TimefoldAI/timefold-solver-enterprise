@@ -1,6 +1,7 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -133,22 +134,31 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
 
         int selectMoveIndex = 0;
         AtomicLong hasNextRemaining;
+        Semaphore waitForDeciderSemaphore;
+        Iterator<Move<Solution_>> sharedIterator;
+        boolean useSemaphore = true;
         if (false) {
             // TODO: Code for split move selectors
         } else {
             hasNextRemaining = new AtomicLong(1);
-            SharedNeverEndingMoveGenerator<Solution_> sharedIterator = new SharedNeverEndingMoveGenerator<>(hasNextRemaining, resultQueue, placement.iterator());
+            waitForDeciderSemaphore = new Semaphore(selectedMoveBufferSize);
+            sharedIterator = placement.iterator();
+            SharedNeverEndingMoveGenerator<Solution_> sharedGenerator = new SharedNeverEndingMoveGenerator<>(hasNextRemaining,
+                    resultQueue, sharedIterator, waitForDeciderSemaphore);
             for (int i = 0; i < moveThreadCount; i++) {
-                iteratorReference.set(i, sharedIterator);
+                iteratorReference.set(i, sharedGenerator);
             }
         }
         moveIndex.set(0);
         resultQueue.startNextStep(stepIndex);
-        while (selectMoveIndex < moveIndex.get() || !resultQueue.checkIfBlocking()){
+        while (selectMoveIndex < moveIndex.get() || !resultQueue.checkIfBlocking()) {
             if (forageResult(stepScope, stepIndex)) {
                 break;
             }
             selectMoveIndex++;
+            if (useSemaphore && (selectMoveIndex % selectedMoveBufferSize) == 0 && !resultQueue.checkIfBlocking()) {
+                waitForDeciderSemaphore.release(selectedMoveBufferSize);
+            }
         }
 
         // Do not evaluate the remaining selected moves for this step that haven't started evaluation yet
@@ -157,6 +167,15 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
         pickMove(stepScope);
         // Start doing the step on every move thread. Don't wait for the stepEnded() event.
         resultQueue.deciderSyncOnEnd();
+        if (useSemaphore) {
+            for (int i = 0; i < waitForDeciderSemaphore.availablePermits(); i++) {
+                if (!sharedIterator.hasNext()) {
+                    break;
+                }
+                sharedIterator.next();
+            }
+        }
+
         if (stepScope.getStep() != null) {
             InnerScoreDirector<Solution_, ?> scoreDirector = stepScope.getScoreDirector();
             if (scoreDirector.requiresFlushing() && stepIndex % 100 == 99) {
