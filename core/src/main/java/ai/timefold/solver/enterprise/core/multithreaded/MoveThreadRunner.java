@@ -79,6 +79,7 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                                 iteratorReference.get(generatedMoveIndex % iteratorReference.length());
                         synchronized (neverEndingMoveGenerator) {
                             generatedMoveIndex = neverEndingMoveGenerator.getNextMoveIndex();
+                            resultQueue.reserveSpaceForMove(generatedMoveIndex);
                             operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex,
                                     neverEndingMoveGenerator.generateNextMove());
                         }

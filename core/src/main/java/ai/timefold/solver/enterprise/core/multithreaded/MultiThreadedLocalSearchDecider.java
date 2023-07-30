@@ -137,21 +137,14 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         int selectMoveIndex = 0;
         AtomicLong hasNextRemaining;
         AtomicBoolean hasNextShared;
-        Semaphore waitForDeciderSemaphore;
         Iterator<Move<Solution_>> sharedIterator;
-        boolean useSemaphore = true;
-        if (false) {
-            // TODO: Code for split move selectors
-        } else {
-            hasNextRemaining = new AtomicLong(1);
-            hasNextShared = new AtomicBoolean(true);
-            waitForDeciderSemaphore = new Semaphore(selectedMoveBufferSize);
-            sharedIterator = moveSelector.iterator();
-            SharedNeverEndingMoveGenerator<Solution_> sharedGenerator = new SharedNeverEndingMoveGenerator<>(hasNextRemaining,
-                    resultQueue, sharedIterator, waitForDeciderSemaphore, hasNextShared);
-            for (int i = 0; i < moveThreadCount; i++) {
-                iteratorReference.set(i, sharedGenerator);
-            }
+        hasNextRemaining = new AtomicLong(1);
+        hasNextShared = new AtomicBoolean(true);
+        sharedIterator = moveSelector.iterator();
+        SharedNeverEndingMoveGenerator<Solution_> sharedGenerator = new SharedNeverEndingMoveGenerator<>(hasNextRemaining,
+                resultQueue, sharedIterator, hasNextShared);
+        for (int i = 0; i < moveThreadCount; i++) {
+            iteratorReference.set(i, sharedGenerator);
         }
         moveIndex.set(0);
         resultQueue.startNextStep(stepIndex);
@@ -160,32 +153,19 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
                 break;
             }
             selectMoveIndex++;
-            if (useSemaphore && (selectMoveIndex % selectedMoveBufferSize) == 0 && !resultQueue.checkIfBlocking()) {
-                waitForDeciderSemaphore.release(selectedMoveBufferSize);
-            }
         }
 
         // Do not evaluate the remaining selected moves for this step that haven't started evaluation yet
-        int remainingPermits = 0;
         resultQueue.blockMoveThreads();
-        if (useSemaphore) {
-            remainingPermits = waitForDeciderSemaphore.drainPermits();
-            hasNextShared.setRelease(false);
-            waitForDeciderSemaphore.release(selectedMoveBufferSize);
-        }
-
         pickMove(stepScope);
         // Start doing the step on every move thread. Don't wait for the stepEnded() event.
         resultQueue.deciderSyncOnEnd();
-        if (useSemaphore) {
-            for (int i = 0; i < remainingPermits; i++) {
-                if (!sharedIterator.hasNext()) {
-                    break;
-                }
-                sharedIterator.next();
-            }
-        }
 
+        // Set Random state to a deterministic value
+        stepScope.getPhaseScope()
+                .getSolverScope()
+                .getWorkingRandom()
+                .setSeed(((long) stepIndex << 32L) | stepScope.getSelectedMoveCount());
         if (stepScope.getStep() != null) {
             InnerScoreDirector<Solution_, ?> scoreDirector = stepScope.getScoreDirector();
             if (scoreDirector.requiresFlushing() && stepIndex % 100 == 99) {
