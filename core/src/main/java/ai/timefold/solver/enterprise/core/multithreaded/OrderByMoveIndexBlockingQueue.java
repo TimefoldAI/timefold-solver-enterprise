@@ -1,6 +1,9 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
-import java.util.concurrent.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
@@ -80,6 +83,23 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
         }
     }
 
+    public void endPhase() {
+        try {
+            syncDeciderAndMoveThreadsStartBarrier.await();
+        } catch (InterruptedException | BrokenBarrierException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void reserveSpaceForMove(int index) {
+        int ringBufferSlot = index % moveResultRingBuffer.length();
+        try {
+            spaceAvailableInRingBufferSemaphores[ringBufferSlot].acquire();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     /**
      * This method is thread-safe. It can be called from any move thread.
      *
@@ -92,11 +112,6 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
     public void addUndoableMove(int moveThreadIndex, int stepIndex, int moveIndex, Move<Solution_> move) {
         int ringBufferSlot = moveIndex % moveResultRingBuffer.length();
         MoveResult<Solution_> result = new MoveResult<>(moveThreadIndex, stepIndex, moveIndex, move, false, null);
-        try {
-            spaceAvailableInRingBufferSemaphores[ringBufferSlot].acquire();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
         if (result.getStepIndex() != filterStepIndex) {
             // Discard element from previous step
             spaceAvailableInRingBufferSemaphores[ringBufferSlot].release();
@@ -127,11 +142,6 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
     public void addMove(int moveThreadIndex, int stepIndex, int moveIndex, Move<Solution_> move, Score score) {
         int ringBufferSlot = moveIndex % moveResultRingBuffer.length();
         MoveResult<Solution_> result = new MoveResult<>(moveThreadIndex, stepIndex, moveIndex, move, true, score);
-        try {
-            spaceAvailableInRingBufferSemaphores[ringBufferSlot].acquire();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
         if (result.getStepIndex() != filterStepIndex) {
             // Discard element from previous step
             spaceAvailableInRingBufferSemaphores[ringBufferSlot].release();
@@ -161,11 +171,6 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
     public void addExceptionThrown(int moveIndex, Throwable throwable) {
         MoveResult<Solution_> result = new MoveResult<>(moveIndex, throwable);
         int ringBufferSlot = moveIndex % moveResultRingBuffer.length();
-        try {
-            spaceAvailableInRingBufferSemaphores[ringBufferSlot].acquire();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
         moveResultRingBuffer.setRelease(ringBufferSlot, result);
         resultAvailableInRingBufferSemaphores[ringBufferSlot].release();
     }
@@ -210,6 +215,12 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
 
     public void deciderSyncOnEnd() {
         try {
+            int threadCount = syncDeciderAndMoveThreadsEndBarrier.getParties();
+            // Need to release permits for results we have not consumed so all threads
+            // will reach barrier
+            for (Semaphore semaphore : spaceAvailableInRingBufferSemaphores) {
+                semaphore.release(threadCount);
+            }
             syncDeciderAndMoveThreadsEndBarrier.await();
         } catch (InterruptedException | BrokenBarrierException e) {
             throw new RuntimeException(e);

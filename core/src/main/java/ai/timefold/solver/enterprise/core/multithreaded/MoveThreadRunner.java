@@ -1,6 +1,8 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
-import java.util.concurrent.*;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -79,6 +81,7 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                                 iteratorReference.get(generatedMoveIndex % iteratorReference.length());
                         synchronized (neverEndingMoveGenerator) {
                             generatedMoveIndex = neverEndingMoveGenerator.getNextMoveIndex();
+                            resultQueue.reserveSpaceForMove(generatedMoveIndex);
                             operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex,
                                     neverEndingMoveGenerator.generateNextMove());
                         }

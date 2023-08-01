@@ -102,6 +102,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         for (int i = 0; i < moveThreadCount; i++) {
             operationQueue.add(destroyOperation);
         }
+        resultQueue.endPhase();
         shutdownMoveThreads();
         long childThreadsScoreCalculationCount = 0;
         for (MoveThreadRunner<Solution_, ?> moveThreadRunner : moveThreadRunnerList) {
