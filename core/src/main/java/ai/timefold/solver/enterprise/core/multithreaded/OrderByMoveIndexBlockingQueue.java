@@ -76,6 +76,14 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
         }
     }
 
+    public void endPhase() {
+        try {
+            syncDeciderAndMoveThreadsStartBarrier.await();
+        } catch (InterruptedException | BrokenBarrierException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public void reserveSpaceForMove(int index) {
         int ringBufferSlot = index % moveResultRingBuffer.length();
         try {
