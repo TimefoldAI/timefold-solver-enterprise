@@ -98,6 +98,7 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
         // Don't clear the operationsQueue to avoid moveThreadBarrier deadlock:
         // The MoveEvaluationOperations are already cleared and the new ApplyStepOperation isn't added yet.
         DestroyOperation<Solution_> destroyOperation = new DestroyOperation<>();
+        // Setting over here does not work, but incrementAndGet does
         for (int i = 0; i < moveThreadCount; i++) {
             operationQueue.add(destroyOperation);
         }
@@ -190,6 +191,10 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return true;
+        }
+        if (result == null) {
+            stepScope.getPhaseScope().getSolverScope().checkYielding();
+            return termination.isPhaseTerminated(stepScope.getPhaseScope());
         }
         if (stepIndex != result.getStepIndex()) {
             throw new IllegalStateException("Impossible situation: the solverThread's stepIndex (" + stepIndex

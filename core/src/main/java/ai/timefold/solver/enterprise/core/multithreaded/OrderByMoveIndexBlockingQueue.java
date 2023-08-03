@@ -38,6 +38,10 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
         }
     }
 
+    public int getMoveThreadCount() {
+        return syncDeciderAndMoveThreadsStartBarrier.getParties() - 1;
+    }
+
     /**
      * Not thread-safe. Can only be called from the solver thread.
      *
@@ -123,6 +127,25 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
         }
     }
 
+    public void reportIteratorExhausted(int stepIndex, int moveIndex) {
+        int ringBufferSlot = moveIndex % moveResultRingBuffer.length();
+        if (stepIndex != filterStepIndex) {
+            // Discard element from previous step
+            spaceAvailableInRingBufferSemaphores[ringBufferSlot].release();
+            return;
+        }
+        moveResultRingBuffer.setRelease(ringBufferSlot, null);
+        resultAvailableInRingBufferSemaphores[ringBufferSlot].release();
+        if (syncDeciderAndMoveThreads.getAcquire()) {
+            try {
+                syncDeciderAndMoveThreadsEndBarrier.await();
+                syncDeciderAndMoveThreadsStartBarrier.await();
+            } catch (InterruptedException | BrokenBarrierException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
     /**
      * This method is thread-safe. It can be called from any move thread.
      * Previous results (that haven't been consumed yet), will still be returned during iteration
@@ -132,11 +155,12 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
      * @param moveIndex the index of the move that generated the exception
      * @param throwable never null
      */
-    public void addExceptionThrown(int moveIndex, Throwable throwable) {
-        MoveResult<Solution_> result = new MoveResult<>(moveIndex, throwable);
+    public void addExceptionThrown(int moveThreadIndex, int moveIndex, Throwable throwable) {
+        MoveResult<Solution_> result = new MoveResult<>(moveThreadIndex, moveIndex, throwable);
         int ringBufferSlot = moveIndex % moveResultRingBuffer.length();
         moveResultRingBuffer.setRelease(ringBufferSlot, result);
         resultAvailableInRingBufferSemaphores[ringBufferSlot].release();
+        syncDeciderAndMoveThreadsEndBarrier.reset();
     }
 
     /**
@@ -154,6 +178,10 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
         MoveResult<Solution_> result = moveResultRingBuffer.getAcquire(ringBufferIndex);
         moveResultRingBuffer.setRelease(ringBufferIndex, null);
         spaceAvailableInRingBufferSemaphores[ringBufferIndex].release();
+        if (result == null) {
+            // iterator exhausted
+            return null;
+        }
         // If 2 exceptions are added from different threads concurrently, either one could end up first.
         // This is a known deviation from 100% reproducibility, that never occurs in a success scenario.
         if (result.hasThrownException()) {
@@ -186,7 +214,18 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
                 semaphore.release(threadCount);
             }
             syncDeciderAndMoveThreadsEndBarrier.await();
-        } catch (InterruptedException | BrokenBarrierException e) {
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (BrokenBarrierException e) {
+            for (int i = 0; i < moveResultRingBuffer.length(); i++) {
+                MoveResult<Solution_> result = moveResultRingBuffer.getAcquire(i);
+                if (result != null && result.hasThrownException()) {
+                    throw new IllegalStateException("The move thread with moveThreadIndex ("
+                            + result.getMoveThreadIndex() + ") has thrown an exception."
+                            + " Relayed here in the parent thread.",
+                            result.getThrowable());
+                }
+            }
             throw new RuntimeException(e);
         }
     }
@@ -216,10 +255,10 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
             this.throwable = null;
         }
 
-        public MoveResult(int moveThreadIndex, Throwable throwable) {
+        public MoveResult(int moveThreadIndex, int moveIndex, Throwable throwable) {
             this.moveThreadIndex = moveThreadIndex;
             this.stepIndex = -1;
-            this.moveIndex = -1;
+            this.moveIndex = moveIndex;
             this.move = null;
             this.moveDoable = false;
             this.score = null;

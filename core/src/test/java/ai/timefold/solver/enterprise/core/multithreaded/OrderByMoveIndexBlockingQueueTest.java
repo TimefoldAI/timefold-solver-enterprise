@@ -122,7 +122,7 @@ class OrderByMoveIndexBlockingQueueTest {
         allPrecedingTasksFinished.await();
 
         IllegalArgumentException exception = new IllegalArgumentException();
-        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(3, exception));
+        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(1, 3, exception));
         exceptionFuture.get(); // Avoid random failing test when the task hasn't started yet or the next task finishes earlier
         executorService.submit(() -> queue.addMove(0, 1, 2, new DummyMove("b2"), SimpleScore.of(-2))).get();
         assertResult("b0", -3, queue.take());
@@ -146,7 +146,7 @@ class OrderByMoveIndexBlockingQueueTest {
         executorService.submit(() -> queue.addMove(0, 0, 2, new DummyMove("a2"), SimpleScore.of(-2)));
         executorService.submit(() -> queue.addMove(1, 0, 3, new DummyMove("a3"), SimpleScore.of(-3)));
         IllegalArgumentException exception = new IllegalArgumentException();
-        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(1, exception));
+        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(0, 1, exception));
         assertThatThrownBy(() -> {
             assertResult("a0", 0, queue.take());
             assertResult("a1", -1, queue.take());

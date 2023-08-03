@@ -63,8 +63,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
     @Override
     public void run() {
         int generatedMoveIndex = -1;
+        int stepIndex = -1;
         try {
-            int stepIndex = -1;
             Score_ lastStepScore = null;
             resultQueue.waitForDecider();
             // Wait for the iteratorLock to be available before entering the loop
@@ -79,9 +79,15 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                                 iteratorReference.get(generatedMoveIndex % iteratorReference.length());
                         synchronized (neverEndingMoveGenerator) {
                             generatedMoveIndex = neverEndingMoveGenerator.getNextMoveIndex();
+                            LOGGER.trace(
+                                    "{}            Move thread ({}) step: step index ({}), move index ({}) Generating move.",
+                                    logIndentation, moveThreadIndex, stepIndex, generatedMoveIndex);
                             resultQueue.reserveSpaceForMove(generatedMoveIndex);
                             operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex,
                                     neverEndingMoveGenerator.generateNextMove());
+                            LOGGER.trace(
+                                    "{}            Move thread ({}) step: step index ({}), move index ({}) Generated move.",
+                                    logIndentation, moveThreadIndex, stepIndex, generatedMoveIndex);
                         }
                     }
                 } catch (InterruptedException e) {
@@ -145,7 +151,15 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                                 + moveEvaluationOperation.getStepIndex() + ") with moveIndex ("
                                 + moveIndex + ").");
                     }
-                    Move<Solution_> move = moveEvaluationOperation.getMove().rebase(scoreDirector);
+                    Move<Solution_> move = moveEvaluationOperation.getMove();
+                    if (move == null) {
+                        LOGGER.trace(
+                                "{}            Move thread ({}) evaluation: step index ({}), move index ({}), iterator exhausted.",
+                                logIndentation, moveThreadIndex, stepIndex, moveIndex);
+                        resultQueue.reportIteratorExhausted(stepIndex, moveIndex);
+                        continue;
+                    }
+                    move = move.rebase(scoreDirector);
                     if (evaluateDoable && !move.isMoveDoable(scoreDirector)) {
                         /*
                          * Construction heuristics does not get here; it accepts even non-doable moves.
@@ -173,7 +187,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
             // in the resultQueue in order to be propagated to the solver thread.
             LOGGER.trace("{}            Move thread ({}) exception that will be propagated to the solver thread.",
                     logIndentation, moveThreadIndex, throwable);
-            resultQueue.addExceptionThrown(generatedMoveIndex == -1 ? moveThreadIndex : generatedMoveIndex, throwable);
+            resultQueue.addExceptionThrown(moveThreadIndex, generatedMoveIndex == -1 ? moveThreadIndex : generatedMoveIndex,
+                    throwable);
         } finally {
             if (scoreDirector != null) {
                 scoreDirector.close();

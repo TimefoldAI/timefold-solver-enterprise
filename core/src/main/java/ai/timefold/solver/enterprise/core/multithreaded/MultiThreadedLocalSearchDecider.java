@@ -82,7 +82,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
 
         for (int moveThreadIndex = 0; moveThreadIndex < moveThreadCount; moveThreadIndex++) {
             MoveThreadRunner<Solution_, ?> moveThreadRunner = new MoveThreadRunner<>(
-                    logIndentation, moveThreadIndex, false,
+                    logIndentation, moveThreadIndex, true,
                     operationQueue, resultQueue, moveThreadBarrier, moveIndex, iteratorReference,
                     assertMoveScoreFromScratch, assertExpectedUndoMoveScore,
                     assertStepScoreFromScratch, assertExpectedStepScore, assertShadowVariablesAreNotStaleAfterStep);
@@ -138,6 +138,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         int selectMoveIndex = 0;
         AtomicLong hasNextRemaining;
         AtomicBoolean hasNextShared;
+        Semaphore waitForDeciderSemaphore;
         Iterator<Move<Solution_>> sharedIterator;
         hasNextRemaining = new AtomicLong(1);
         hasNextShared = new AtomicBoolean(true);
@@ -158,6 +159,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
 
         // Do not evaluate the remaining selected moves for this step that haven't started evaluation yet
         resultQueue.blockMoveThreads();
+
         pickMove(stepScope);
         // Start doing the step on every move thread. Don't wait for the stepEnded() event.
         resultQueue.deciderSyncOnEnd();
@@ -190,6 +192,10 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return true;
+        }
+        if (result == null) {
+            stepScope.getPhaseScope().getSolverScope().checkYielding();
+            return termination.isPhaseTerminated(stepScope.getPhaseScope());
         }
         if (stepIndex != result.getStepIndex()) {
             throw new IllegalStateException("Impossible situation: the solverThread's stepIndex (" + stepIndex
