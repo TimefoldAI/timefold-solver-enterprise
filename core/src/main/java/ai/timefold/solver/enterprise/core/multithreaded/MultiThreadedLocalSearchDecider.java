@@ -190,22 +190,21 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         int foragingMoveIndex = result.getMoveIndex();
         LocalSearchMoveScope<Solution_> moveScope = new LocalSearchMoveScope<>(stepScope, foragingMoveIndex, foragingMove);
         if (!result.isMoveDoable()) {
-            logger.trace("{}        Move index ({}) not doable, ignoring move ({}).",
-                    logIndentation, foragingMoveIndex, foragingMove);
-        } else {
-            moveScope.setScore(result.getScore());
-            // Every doable move result represents a single score calculation on a move thread.
-            moveScope.getScoreDirector().incrementCalculationCount();
-            boolean accepted = acceptor.isAccepted(moveScope);
-            moveScope.setAccepted(accepted);
-            logger.trace("{}        Move index ({}), score ({}), accepted ({}), move ({}).",
-                    logIndentation,
-                    foragingMoveIndex, moveScope.getScore(), moveScope.getAccepted(),
-                    foragingMove);
-            forager.addMove(moveScope);
-            if (forager.isQuitEarly()) {
-                return true;
-            }
+            throw new IllegalStateException("Impossible state: Local search move selector (" + moveSelector
+                    + ") provided a non-doable move (" + result.getMove() + ").");
+        }
+        moveScope.setScore(result.getScore());
+        // Every doable move result represents a single score calculation on a move thread.
+        moveScope.getScoreDirector().incrementCalculationCount();
+        boolean accepted = acceptor.isAccepted(moveScope);
+        moveScope.setAccepted(accepted);
+        logger.trace("{}        Move index ({}), score ({}), accepted ({}), move ({}).",
+                logIndentation,
+                foragingMoveIndex, moveScope.getScore(), moveScope.getAccepted(),
+                foragingMove);
+        forager.addMove(moveScope);
+        if (forager.isQuitEarly()) {
+            return true;
         }
         stepScope.getPhaseScope().getSolverScope().checkYielding();
         return termination.isPhaseTerminated(stepScope.getPhaseScope());
