@@ -82,7 +82,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
 
         for (int moveThreadIndex = 0; moveThreadIndex < moveThreadCount; moveThreadIndex++) {
             MoveThreadRunner<Solution_, ?> moveThreadRunner = new MoveThreadRunner<>(
-                    logIndentation, moveThreadIndex, false,
+                    logIndentation, moveThreadIndex, true,
                     operationQueue, resultQueue, moveThreadBarrier, moveIndex, iteratorReference,
                     assertMoveScoreFromScratch, assertExpectedUndoMoveScore,
                     assertStepScoreFromScratch, assertExpectedStepScore, assertShadowVariablesAreNotStaleAfterStep);
@@ -140,6 +140,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         AtomicBoolean hasNextShared;
         Semaphore waitForDeciderSemaphore;
         Iterator<Move<Solution_>> sharedIterator;
+        SharedNeverEndingMoveGenerator<Solution_> sharedGenerator;
         boolean useSemaphore = true;
         if (false) {
             // TODO: Code for split move selectors
@@ -148,7 +149,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
             hasNextShared = new AtomicBoolean(true);
             waitForDeciderSemaphore = new Semaphore(selectedMoveBufferSize);
             sharedIterator = moveSelector.iterator();
-            SharedNeverEndingMoveGenerator<Solution_> sharedGenerator = new SharedNeverEndingMoveGenerator<>(hasNextRemaining,
+            sharedGenerator = new SharedNeverEndingMoveGenerator<>(hasNextRemaining,
                     resultQueue, sharedIterator, waitForDeciderSemaphore, hasNextShared);
             for (int i = 0; i < moveThreadCount; i++) {
                 iteratorReference.set(i, sharedGenerator);
@@ -165,7 +166,6 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
                 waitForDeciderSemaphore.release(selectedMoveBufferSize);
             }
         }
-
         // Do not evaluate the remaining selected moves for this step that haven't started evaluation yet
         int remainingPermits = 0;
         resultQueue.blockMoveThreads();
@@ -210,6 +210,10 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return true;
+        }
+        if (result == null) {
+            stepScope.getPhaseScope().getSolverScope().checkYielding();
+            return termination.isPhaseTerminated(stepScope.getPhaseScope());
         }
         if (stepIndex != result.getStepIndex()) {
             throw new IllegalStateException("Impossible situation: the solverThread's stepIndex (" + stepIndex

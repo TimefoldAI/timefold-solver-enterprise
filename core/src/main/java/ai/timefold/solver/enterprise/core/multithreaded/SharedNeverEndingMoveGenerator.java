@@ -7,7 +7,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import ai.timefold.solver.core.impl.heuristic.move.Move;
-import ai.timefold.solver.core.impl.heuristic.move.NoChangeMove;
 
 public final class SharedNeverEndingMoveGenerator<Solution_> implements NeverEndingMoveGenerator<Solution_> {
     final AtomicLong hasNextRemaining;
@@ -15,7 +14,6 @@ public final class SharedNeverEndingMoveGenerator<Solution_> implements NeverEnd
     final Iterator<Move<Solution_>> delegateIterator;
     final OrderByMoveIndexBlockingQueue<Solution_> resultQueue;
     final Semaphore waitForDeciderSemaphore;
-    final static NoChangeMove<?> NO_CHANGE_MOVE = new NoChangeMove<>();
     final AtomicBoolean hasNext;
 
     SharedNeverEndingMoveGenerator(AtomicLong hasNextRemaining,
@@ -31,25 +29,27 @@ public final class SharedNeverEndingMoveGenerator<Solution_> implements NeverEnd
         this.nextMoveIndex = new AtomicInteger(0);
     }
 
-    @SuppressWarnings("unchecked")
     public Move<Solution_> generateNextMove() {
+        if (!hasNext.getAcquire()) {
+            return null;
+        }
         try {
             waitForDeciderSemaphore.acquire();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-
         if (!hasNext.getAcquire()) {
-            return (NoChangeMove<Solution_>) NO_CHANGE_MOVE;
+            return null;
         }
         if (delegateIterator.hasNext()) {
             return delegateIterator.next();
         } else {
             hasNext.setRelease(false);
+            waitForDeciderSemaphore.release(resultQueue.getMoveThreadCount());
             if (hasNextRemaining.decrementAndGet() == 0) {
                 resultQueue.blockMoveThreads();
             }
-            return (NoChangeMove<Solution_>) NO_CHANGE_MOVE;
+            return null;
         }
     }
 

@@ -4,12 +4,7 @@ import static ai.timefold.solver.core.impl.testdata.util.PlannerAssert.assertCod
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import ai.timefold.solver.core.api.score.buildin.simple.SimpleScore;
 import ai.timefold.solver.core.impl.heuristic.move.DummyMove;
@@ -155,7 +150,7 @@ class OrderByMoveIndexBlockingQueueTest {
         });
         allPrecedingTasksFinished.await();
         IllegalArgumentException exception = new IllegalArgumentException();
-        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(3, exception));
+        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(1, 3, exception));
         exceptionFuture.get(); // Avoid random failing test when the task hasn't started yet or the next task finishes earlier
         executorService.submit(() -> queue.addMove(0, 1, 2, new DummyMove("b2"), SimpleScore.of(-2))).get();
         assertResult("b0", false, queue.take());
@@ -179,7 +174,7 @@ class OrderByMoveIndexBlockingQueueTest {
         executorService.submit(() -> queue.addMove(0, 0, 2, new DummyMove("a2"), SimpleScore.of(-2)));
         executorService.submit(() -> queue.addMove(1, 0, 3, new DummyMove("a3"), SimpleScore.of(-3)));
         IllegalArgumentException exception = new IllegalArgumentException();
-        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(1, exception));
+        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(0, 1, exception));
         assertThatThrownBy(() -> {
             assertResult("a0", 0, queue.take());
             assertResult("a1", -1, queue.take());
