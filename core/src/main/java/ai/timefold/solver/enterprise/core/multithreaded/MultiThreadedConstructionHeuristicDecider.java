@@ -1,15 +1,11 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import ai.timefold.solver.core.api.domain.solution.PlanningSolution;
 import ai.timefold.solver.core.api.score.Score;
@@ -41,6 +37,8 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
     private BlockingQueue<MoveThreadOperation<Solution_>> operationQueue;
     private OrderByMoveIndexBlockingQueue<Solution_> resultQueue;
     private CyclicBarrier moveThreadBarrier;
+    private AtomicInteger moveIndex;
+    private AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference;
     private ExecutorService executor;
     private List<MoveThreadRunner<Solution_, ?>> moveThreadRunnerList;
 
@@ -71,15 +69,18 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
         // Capacity: number of moves in circulation + number of setup xor step operations + number of destroy operations
         operationQueue = new ArrayBlockingQueue<>(selectedMoveBufferSize + moveThreadCount + moveThreadCount);
         // Capacity: number of moves in circulation + number of exception handling results
-        resultQueue = new OrderByMoveIndexBlockingQueue<>(selectedMoveBufferSize + moveThreadCount);
+        resultQueue = new OrderByMoveIndexBlockingQueue<>(moveThreadCount, selectedMoveBufferSize + moveThreadCount);
         moveThreadBarrier = new CyclicBarrier(moveThreadCount);
+        moveIndex = new AtomicInteger(0);
+        iteratorReference = new AtomicReferenceArray<>(moveThreadCount);
         InnerScoreDirector<Solution_, ?> scoreDirector = phaseScope.getScoreDirector();
         executor = createThreadPoolExecutor();
         moveThreadRunnerList = new ArrayList<>(moveThreadCount);
+
         for (int moveThreadIndex = 0; moveThreadIndex < moveThreadCount; moveThreadIndex++) {
             MoveThreadRunner<Solution_, ?> moveThreadRunner = new MoveThreadRunner<>(
                     logIndentation, moveThreadIndex, false,
-                    operationQueue, resultQueue, moveThreadBarrier,
+                    operationQueue, resultQueue, moveThreadBarrier, moveIndex, iteratorReference,
                     assertMoveScoreFromScratch, assertExpectedUndoMoveScore,
                     assertStepScoreFromScratch, assertExpectedStepScore, assertShadowVariablesAreNotStaleAfterStep);
             moveThreadRunnerList.add(moveThreadRunner);
@@ -129,34 +130,34 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
     @Override
     public void decideNextStep(ConstructionHeuristicStepScope<Solution_> stepScope, Placement<Solution_> placement) {
         int stepIndex = stepScope.getStepIndex();
-        resultQueue.startNextStep(stepIndex);
 
         int selectMoveIndex = 0;
-        int movesInPlay = 0;
-        Iterator<Move<Solution_>> moveIterator = placement.iterator();
-        do {
-            boolean hasNextMove = moveIterator.hasNext();
-            // First fill the buffer so move evaluation can run freely in parallel
-            // For reproducibility, the selectedMoveBufferSize always need to be entirely selected,
-            // even if some of those moves won't end up being evaluated or foraged
-            if (movesInPlay > 0 && (selectMoveIndex >= selectedMoveBufferSize || !hasNextMove)) {
-                if (forageResult(stepScope, stepIndex)) {
-                    break;
-                }
-                movesInPlay--;
+        AtomicLong hasNextRemaining;
+        if (false) {
+            // TODO: Code for split move selectors
+        } else {
+            hasNextRemaining = new AtomicLong(1);
+            SharedNeverEndingMoveGenerator<Solution_> sharedIterator =
+                    new SharedNeverEndingMoveGenerator<>(hasNextRemaining, resultQueue, placement.iterator());
+            for (int i = 0; i < moveThreadCount; i++) {
+                iteratorReference.set(i, sharedIterator);
             }
-            if (hasNextMove) {
-                Move<Solution_> move = moveIterator.next();
-                operationQueue.add(new MoveEvaluationOperation<>(stepIndex, selectMoveIndex, move));
-                selectMoveIndex++;
-                movesInPlay++;
+        }
+        moveIndex.set(0);
+        resultQueue.startNextStep(stepIndex);
+        while (selectMoveIndex < moveIndex.get() || !resultQueue.checkIfBlocking()) {
+            if (forageResult(stepScope, stepIndex)) {
+                break;
             }
-        } while (movesInPlay > 0);
+            selectMoveIndex++;
+        }
 
         // Do not evaluate the remaining selected moves for this step that haven't started evaluation yet
-        operationQueue.clear();
+        resultQueue.blockMoveThreads();
+
         pickMove(stepScope);
         // Start doing the step on every move thread. Don't wait for the stepEnded() event.
+        resultQueue.deciderSyncOnEnd();
         if (stepScope.getStep() != null) {
             InnerScoreDirector<Solution_, ?> scoreDirector = stepScope.getScoreDirector();
             if (scoreDirector.requiresFlushing() && stepIndex % 100 == 99) {

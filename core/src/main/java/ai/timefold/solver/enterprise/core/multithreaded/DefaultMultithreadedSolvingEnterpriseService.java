@@ -15,7 +15,6 @@ import ai.timefold.solver.core.impl.solver.termination.Termination;
 import ai.timefold.solver.core.impl.solver.thread.ChildThreadType;
 
 public final class DefaultMultithreadedSolvingEnterpriseService implements MultithreadedSolvingEnterpriseService {
-
     @Override
     public <Solution_> ConstructionHeuristicDecider<Solution_> buildConstructionHeuristic(int moveThreadCount,
             Termination<Solution_> termination, ConstructionHeuristicForager<Solution_> forager,
@@ -24,8 +23,7 @@ public final class DefaultMultithreadedSolvingEnterpriseService implements Multi
         if (moveThreadBufferSize == null) {
             // TODO Verify this is a good default by more meticulous benchmarking on multiple machines and JDK's
             // If it's too low, move threads will need to wait on the buffer, which hurts performance
-            // If it's too high, more moves are selected that aren't foraged
-            moveThreadBufferSize = 10;
+            moveThreadBufferSize = 64;
         }
         ThreadFactory threadFactory = configPolicy.buildThreadFactory(ChildThreadType.MOVE_THREAD);
         int selectedMoveBufferSize = moveThreadCount * moveThreadBufferSize;
@@ -50,8 +48,7 @@ public final class DefaultMultithreadedSolvingEnterpriseService implements Multi
         if (moveThreadBufferSize == null) {
             // TODO Verify this is a good default by more meticulous benchmarking on multiple machines and JDK's
             // If it's too low, move threads will need to wait on the buffer, which hurts performance
-            // If it's too high, more moves are selected that aren't foraged
-            moveThreadBufferSize = 10;
+            moveThreadBufferSize = 64;
         }
         ThreadFactory threadFactory = configPolicy.buildThreadFactory(ChildThreadType.MOVE_THREAD);
         int selectedMoveBufferSize = moveThreadCount * moveThreadBufferSize;

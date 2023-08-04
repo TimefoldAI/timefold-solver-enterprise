@@ -13,7 +13,6 @@ import ai.timefold.solver.core.impl.testdata.domain.TestdataSolution;
 import ai.timefold.solver.core.impl.testdata.domain.TestdataValue;
 import ai.timefold.solver.core.impl.testdata.util.PlannerTestUtils;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -25,7 +24,6 @@ class SolverConfigMultiThreadedTest {
         runSolvingAndVerifySolution(10, 20, "256");
     }
 
-    @Disabled("PLANNER-1180")
     @Test
     @Timeout(5)
     void solvingOfVerySmallProblemFinishes() {
