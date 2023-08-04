@@ -79,28 +79,6 @@ class OrderByMoveIndexBlockingQueueTest {
     }
 
     @Test
-    void addUndoableMove() throws InterruptedException {
-        // Capacity: 4 moves in circulation + 2 exception handling results
-        OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(4 + 2);
-
-        queue.startNextStep(0);
-        executorService.submit(() -> queue.addUndoableMove(0, 0, 0, new DummyMove("a0")));
-        executorService.submit(() -> queue.addUndoableMove(1, 0, 3, new DummyMove("a3")));
-        executorService.submit(() -> queue.addMove(0, 0, 1, new DummyMove("a1"), SimpleScore.of(-1)));
-        executorService.submit(() -> queue.addUndoableMove(1, 0, 2, new DummyMove("a2")));
-        assertResult("a0", false, queue.take());
-        assertResult("a1", -1, queue.take());
-        assertResult("a2", false, queue.take());
-
-        queue.startNextStep(1);
-        executorService.submit(() -> queue.addMove(0, 1, 1, new DummyMove("b1"), SimpleScore.of(-1)));
-        executorService.submit(() -> queue.addUndoableMove(1, 0, 4, new DummyMove("a4")));
-        executorService.submit(() -> queue.addUndoableMove(1, 1, 0, new DummyMove("b0")));
-        assertResult("b0", false, queue.take());
-        assertResult("b1", -1, queue.take());
-    }
-
-    @Test
     void addExceptionThrown() throws InterruptedException, ExecutionException {
         // Capacity: 4 moves in circulation + 2 exception handling results
         OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(4 + 2);
@@ -122,11 +100,11 @@ class OrderByMoveIndexBlockingQueueTest {
             allPrecedingTasksFinished.countDown();
         });
         executorService.submit(() -> {
-            queue.addUndoableMove(1, 0, 4, new DummyMove("a4"));
+            queue.addMove(1, 0, 4, new DummyMove("a4"), SimpleScore.of(-2));
             allPrecedingTasksFinished.countDown();
         });
         executorService.submit(() -> {
-            queue.addUndoableMove(1, 1, 0, new DummyMove("b0"));
+            queue.addMove(1, 1, 0, new DummyMove("b0"), SimpleScore.of(-3));
             allPrecedingTasksFinished.countDown();
         });
         allPrecedingTasksFinished.await();
@@ -135,7 +113,7 @@ class OrderByMoveIndexBlockingQueueTest {
         Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(1, exception));
         exceptionFuture.get(); // Avoid random failing test when the task hasn't started yet or the next task finishes earlier
         executorService.submit(() -> queue.addMove(0, 1, 2, new DummyMove("b2"), SimpleScore.of(-2))).get();
-        assertResult("b0", false, queue.take());
+        assertResult("b0", -3, queue.take());
         assertResult("b1", -1, queue.take());
         assertThatThrownBy(queue::take).hasCause(exception);
     }
@@ -165,12 +143,6 @@ class OrderByMoveIndexBlockingQueueTest {
     private void assertResult(String moveCode, int score, OrderByMoveIndexBlockingQueue.MoveResult<TestdataSolution> result) {
         assertCode(moveCode, result.getMove());
         assertThat(result.getScore()).isEqualTo(SimpleScore.of(score));
-    }
-
-    private void assertResult(String moveCode, boolean doable,
-            OrderByMoveIndexBlockingQueue.MoveResult<TestdataSolution> result) {
-        assertCode(moveCode, result.getMove());
-        assertThat(result.isMoveDoable()).isEqualTo(doable);
     }
 
 }

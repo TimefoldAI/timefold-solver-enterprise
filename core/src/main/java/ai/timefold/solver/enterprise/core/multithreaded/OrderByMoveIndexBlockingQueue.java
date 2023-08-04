@@ -54,26 +54,6 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
      * @param stepIndex at least 0
      * @param moveIndex at least 0
      * @param move never null
-     * @see BlockingQueue#add(Object)
-     */
-    public void addUndoableMove(int moveThreadIndex, int stepIndex, int moveIndex, Move<Solution_> move) {
-        MoveResult<Solution_> result = new MoveResult<>(moveThreadIndex, stepIndex, moveIndex, move, false, null);
-        synchronized (this) {
-            if (result.getStepIndex() != filterStepIndex) {
-                // Discard element from previous step
-                return;
-            }
-            innerQueue.add(result);
-        }
-    }
-
-    /**
-     * This method is thread-safe. It can be called from any move thread.
-     *
-     * @param moveThreadIndex {@code 0 <= moveThreadIndex < moveThreadCount}
-     * @param stepIndex at least 0
-     * @param moveIndex at least 0
-     * @param move never null
      * @param score never null
      * @see BlockingQueue#add(Object)
      */

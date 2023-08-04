@@ -126,22 +126,20 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                     Move<Solution_> move = moveEvaluationOperation.getMove().rebase(scoreDirector);
                     if (evaluateDoable && !move.isMoveDoable(scoreDirector)) {
                         /*
-                         * Only Construction Heuristics gets here.
+                         * Construction heuristics does not get here; it accepts even non-doable moves.
                          * Local Search does not evaluate non-doable moves, they are filtered out during selection.
                          */
-                        LOGGER.trace("{}            Move thread ({}) evaluation: step index ({}), move index ({}), not doable.",
-                                logIndentation, moveThreadIndex, stepIndex, moveIndex);
-                        resultQueue.addUndoableMove(moveThreadIndex, stepIndex, moveIndex, move);
-                    } else {
-                        Score<?> score = scoreDirector.doAndProcessMove(move, assertMoveScoreFromScratch);
-                        if (assertExpectedUndoMoveScore) {
-                            scoreDirector.assertExpectedUndoMoveScore(move, lastStepScore);
-                        }
-                        LOGGER.trace("{}            Move thread ({}) evaluation: step index ({}), move index ({}), score ({}).",
-                                logIndentation, moveThreadIndex, stepIndex, moveIndex, score);
-                        // Deliberately add to fail fast if there is not enough capacity (which is impossible)
-                        resultQueue.addMove(moveThreadIndex, stepIndex, moveIndex, move, score);
+                        throw new IllegalStateException("Impossible state: move (" + move
+                                + ") is not doable with the current scoreDirector (" + scoreDirector + ").");
                     }
+                    Score<?> score = scoreDirector.doAndProcessMove(move, assertMoveScoreFromScratch);
+                    if (assertExpectedUndoMoveScore) {
+                        scoreDirector.assertExpectedUndoMoveScore(move, lastStepScore);
+                    }
+                    LOGGER.trace("{}            Move thread ({}) evaluation: step index ({}), move index ({}), score ({}).",
+                            logIndentation, moveThreadIndex, stepIndex, moveIndex, score);
+                    // Deliberately add to fail fast if there is not enough capacity (which is impossible)
+                    resultQueue.addMove(moveThreadIndex, stepIndex, moveIndex, move, score);
                 } else {
                     throw new IllegalStateException("Unknown operation (" + operation + ").");
                 }
