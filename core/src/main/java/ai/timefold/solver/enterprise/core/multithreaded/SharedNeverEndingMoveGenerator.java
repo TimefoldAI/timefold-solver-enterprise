@@ -13,16 +13,20 @@ public final class SharedNeverEndingMoveGenerator<Solution_> implements NeverEnd
     final Iterator<Move<Solution_>> delegateIterator;
     final OrderByMoveIndexBlockingQueue<Solution_> resultQueue;
     final AtomicBoolean hasNext;
+    final int increment;
 
     SharedNeverEndingMoveGenerator(AtomicLong hasNextRemaining,
             OrderByMoveIndexBlockingQueue<Solution_> resultQueue,
             Iterator<Move<Solution_>> delegateIterator,
-            AtomicBoolean hasNext) {
+            AtomicBoolean hasNext,
+            int offset,
+            int increment) {
         this.hasNextRemaining = hasNextRemaining;
         this.resultQueue = resultQueue;
         this.delegateIterator = delegateIterator;
         this.hasNext = hasNext;
-        this.nextMoveIndex = new AtomicInteger(0);
+        this.nextMoveIndex = new AtomicInteger(offset);
+        this.increment = increment;
     }
 
     public Move<Solution_> generateNextMove() {
@@ -42,6 +46,6 @@ public final class SharedNeverEndingMoveGenerator<Solution_> implements NeverEnd
 
     @Override
     public int getNextMoveIndex() {
-        return nextMoveIndex.getAndIncrement();
+        return nextMoveIndex.getAndAdd(increment);
     }
 }

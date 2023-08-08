@@ -1,8 +1,10 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
-import java.util.concurrent.*;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import ai.timefold.solver.core.api.score.Score;
@@ -21,7 +23,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
     private final int moveThreadIndex;
     private final boolean evaluateDoable;
 
-    private final BlockingQueue<MoveThreadOperation<Solution_>> operationQueue;
+    private final AtomicReference<MoveThreadOperation<Solution_>> nextSynchronizedOperation;
+    private final AtomicInteger remainingThreadsToTakeNextSynchronizedOperation;
     private final OrderByMoveIndexBlockingQueue<Solution_> resultQueue;
     private final CyclicBarrier moveThreadBarrier;
     private final AtomicInteger moveIndex;
@@ -37,7 +40,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
     private final AtomicLong calculationCount = new AtomicLong(-1);
 
     public MoveThreadRunner(String logIndentation, int moveThreadIndex, boolean evaluateDoable,
-            BlockingQueue<MoveThreadOperation<Solution_>> operationQueue,
+            AtomicReference<MoveThreadOperation<Solution_>> nextSynchronizedOperation,
+            AtomicInteger remainingThreadsToTakeNextSynchronizedOperation,
             OrderByMoveIndexBlockingQueue<Solution_> resultQueue,
             CyclicBarrier moveThreadBarrier,
             AtomicInteger moveIndex,
@@ -48,7 +52,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
         this.logIndentation = logIndentation;
         this.moveThreadIndex = moveThreadIndex;
         this.evaluateDoable = evaluateDoable;
-        this.operationQueue = operationQueue;
+        this.nextSynchronizedOperation = nextSynchronizedOperation;
+        this.remainingThreadsToTakeNextSynchronizedOperation = remainingThreadsToTakeNextSynchronizedOperation;
         this.resultQueue = resultQueue;
         this.moveThreadBarrier = moveThreadBarrier;
         this.moveIndex = moveIndex;
@@ -70,29 +75,27 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
             // Wait for the iteratorLock to be available before entering the loop
             while (true) {
                 MoveThreadOperation<Solution_> operation;
-                try {
-                    if (!operationQueue.isEmpty()) {
-                        operation = operationQueue.take();
-                    } else {
-                        generatedMoveIndex = moveIndex.getAndIncrement();
-                        NeverEndingMoveGenerator<Solution_> neverEndingMoveGenerator =
-                                iteratorReference.get(generatedMoveIndex % iteratorReference.length());
-                        synchronized (neverEndingMoveGenerator) {
-                            generatedMoveIndex = neverEndingMoveGenerator.getNextMoveIndex();
-                            LOGGER.trace(
-                                    "{}            Move thread ({}) step: step index ({}), move index ({}) Generating move.",
-                                    logIndentation, moveThreadIndex, stepIndex, generatedMoveIndex);
-                            resultQueue.reserveSpaceForMove(generatedMoveIndex);
-                            operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex,
-                                    neverEndingMoveGenerator.generateNextMove());
-                            LOGGER.trace(
-                                    "{}            Move thread ({}) step: step index ({}), move index ({}) Generated move.",
-                                    logIndentation, moveThreadIndex, stepIndex, generatedMoveIndex);
-                        }
+                operation = nextSynchronizedOperation.get();
+                if (operation != null) {
+                    if (remainingThreadsToTakeNextSynchronizedOperation.decrementAndGet() == 0) {
+                        nextSynchronizedOperation.set(null);
                     }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
+                } else {
+                    generatedMoveIndex = moveIndex.getAndIncrement();
+                    NeverEndingMoveGenerator<Solution_> neverEndingMoveGenerator =
+                            iteratorReference.get(generatedMoveIndex % iteratorReference.length());
+                    synchronized (neverEndingMoveGenerator) {
+                        generatedMoveIndex = neverEndingMoveGenerator.getNextMoveIndex();
+                        LOGGER.trace(
+                                "{}            Move thread ({}) step: step index ({}), move index ({}) Generating move.",
+                                logIndentation, moveThreadIndex, stepIndex, generatedMoveIndex);
+                        resultQueue.reserveSpaceForMove(generatedMoveIndex);
+                        operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex,
+                                neverEndingMoveGenerator.generateNextMove());
+                        LOGGER.trace(
+                                "{}            Move thread ({}) step: step index ({}), move index ({}) Generated move.",
+                                logIndentation, moveThreadIndex, stepIndex, generatedMoveIndex);
+                    }
                 }
 
                 if (operation instanceof SetupOperation) {

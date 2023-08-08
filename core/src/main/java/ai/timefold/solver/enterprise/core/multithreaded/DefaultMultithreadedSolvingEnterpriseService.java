@@ -1,5 +1,8 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 import java.util.concurrent.ThreadFactory;
 
 import ai.timefold.solver.core.config.solver.EnvironmentMode;
@@ -42,7 +45,8 @@ public final class DefaultMultithreadedSolvingEnterpriseService implements Multi
 
     @Override
     public <Solution_> LocalSearchDecider<Solution_> buildLocalSearch(int moveThreadCount, Termination<Solution_> termination,
-            MoveSelector<Solution_> moveSelector, Acceptor<Solution_> acceptor, LocalSearchForager<Solution_> forager,
+            List<MoveSelector<Solution_>> moveSelectorList, Acceptor<Solution_> acceptor,
+            LocalSearchForager<Solution_> forager,
             EnvironmentMode environmentMode, HeuristicConfigPolicy<Solution_> configPolicy) {
         Integer moveThreadBufferSize = configPolicy.getMoveThreadBufferSize();
         if (moveThreadBufferSize == null) {
@@ -52,8 +56,12 @@ public final class DefaultMultithreadedSolvingEnterpriseService implements Multi
         }
         ThreadFactory threadFactory = configPolicy.buildThreadFactory(ChildThreadType.MOVE_THREAD);
         int selectedMoveBufferSize = moveThreadCount * moveThreadBufferSize;
+        List<Random> workingRandomList = new ArrayList<>(moveThreadCount);
+        for (int i = 0; i < moveThreadCount; i++) {
+            workingRandomList.add(new Random(i));
+        }
         MultiThreadedLocalSearchDecider<Solution_> multiThreadedDecider = new MultiThreadedLocalSearchDecider<>(
-                configPolicy.getLogIndentation(), termination, moveSelector, acceptor, forager,
+                configPolicy.getLogIndentation(), termination, moveSelectorList, workingRandomList, acceptor, forager,
                 threadFactory, moveThreadCount, selectedMoveBufferSize);
         if (environmentMode.isNonIntrusiveFullAsserted()) {
             multiThreadedDecider.setAssertStepScoreFromScratch(true);
@@ -64,5 +72,4 @@ public final class DefaultMultithreadedSolvingEnterpriseService implements Multi
         }
         return multiThreadedDecider;
     }
-
 }
