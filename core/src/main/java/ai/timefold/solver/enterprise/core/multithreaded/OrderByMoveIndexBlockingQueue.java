@@ -2,7 +2,6 @@ package ai.timefold.solver.enterprise.core.multithreaded;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -16,8 +15,8 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
     // Semaphores are reused/never change, and thus don't need to be in an AtomicReferenceArray
     private final Semaphore[] spaceAvailableInRingBufferSemaphores;
     private final Semaphore[] resultAvailableInRingBufferSemaphores;
-    private final CyclicBarrier syncDeciderAndMoveThreadsStartBarrier;
-    private final CyclicBarrier syncDeciderAndMoveThreadsEndBarrier;
+    private final BusyWaitCyclicBarrier syncDeciderAndMoveThreadsStartBarrier;
+    private final BusyWaitCyclicBarrier syncDeciderAndMoveThreadsEndBarrier;
     private final AtomicBoolean syncDeciderAndMoveThreads;
 
     private int filterStepIndex = Integer.MIN_VALUE;
@@ -25,8 +24,8 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
 
     public OrderByMoveIndexBlockingQueue(int threadCount, int capacity) {
         // all move threads + decider
-        syncDeciderAndMoveThreadsStartBarrier = new CyclicBarrier(threadCount + 1);
-        syncDeciderAndMoveThreadsEndBarrier = new CyclicBarrier(threadCount + 1);
+        syncDeciderAndMoveThreadsStartBarrier = new BusyWaitCyclicBarrier(threadCount + 1);
+        syncDeciderAndMoveThreadsEndBarrier = new BusyWaitCyclicBarrier(threadCount + 1);
         syncDeciderAndMoveThreads = new AtomicBoolean(false);
 
         moveResultRingBuffer = new AtomicReferenceArray<>(capacity);
