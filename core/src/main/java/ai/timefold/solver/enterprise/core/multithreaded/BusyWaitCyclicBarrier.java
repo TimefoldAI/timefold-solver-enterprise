@@ -7,11 +7,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 final class BusyWaitCyclicBarrier {
     private final int parties;
     private final AtomicInteger waitingParties;
+    private final AtomicInteger finishedParties;
     private final AtomicBoolean isReset;
 
     public BusyWaitCyclicBarrier(int parties) {
         this.parties = parties;
         waitingParties = new AtomicInteger(0);
+        finishedParties = new AtomicInteger(0);
         isReset = new AtomicBoolean(false);
     }
 
@@ -21,7 +23,18 @@ final class BusyWaitCyclicBarrier {
 
     public void await() throws InterruptedException, BrokenBarrierException {
         if (waitingParties.incrementAndGet() == parties) {
+            finishedParties.incrementAndGet();
             waitingParties.set(0);
+            long startTime = System.nanoTime();
+            while (finishedParties.get() > 0) {
+                if (isReset.get()) {
+                    throw new BrokenBarrierException();
+                }
+                if (System.nanoTime() - startTime > 10_000) {
+                    Thread.sleep(0L, 1);
+                    startTime = System.nanoTime();
+                }
+            }
             return;
         }
         // Busy Wait
@@ -31,6 +44,20 @@ final class BusyWaitCyclicBarrier {
                 if (waitingParties.decrementAndGet() == 0) {
                     isReset.set(false);
                 }
+                throw new BrokenBarrierException();
+            }
+            if (System.nanoTime() - startTime > 10_000) {
+                Thread.sleep(0L, 1);
+                startTime = System.nanoTime();
+            }
+        }
+        if (finishedParties.incrementAndGet() == parties) {
+            finishedParties.set(0);
+            return;
+        }
+        startTime = System.nanoTime();
+        while (finishedParties.get() > 0) {
+            if (isReset.get()) {
                 throw new BrokenBarrierException();
             }
             if (System.nanoTime() - startTime > 10_000) {
