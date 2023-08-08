@@ -3,7 +3,10 @@ package ai.timefold.solver.enterprise.core.multithreaded;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.*;
 
 import ai.timefold.solver.core.api.domain.solution.PlanningSolution;
@@ -37,9 +40,8 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
     private boolean assertShadowVariablesAreNotStaleAfterStep = false;
 
     private AtomicReference<MoveThreadOperation<Solution_>> nextSynchronizedOperation;
-    private AtomicInteger remainingThreadsToTakeNextSynchronizedOperation;
+    private AtomicInteger nextSynchronizedOperationIndex;
     private OrderByMoveIndexBlockingQueue<Solution_> resultQueue;
-    private CyclicBarrier moveThreadBarrier;
     private AtomicInteger moveIndex;
     private AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference;
     private ExecutorService executor;
@@ -49,7 +51,9 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
             List<MoveSelector<Solution_>> moveSelectorList, List<Random> workingRandomList,
             Acceptor<Solution_> acceptor, LocalSearchForager<Solution_> forager,
             ThreadFactory threadFactory, int moveThreadCount, int selectedMoveBufferSize) {
-        super(logIndentation, termination, new MoveSelectorInListProxy<>(moveSelectorList, workingRandomList), acceptor,
+        super(logIndentation, termination,
+                new MoveSelectorInListProxy<>(moveSelectorList, workingRandomList),
+                acceptor,
                 forager);
         this.threadFactory = threadFactory;
         this.moveThreadCount = moveThreadCount;
@@ -82,10 +86,9 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
     public void phaseStarted(LocalSearchPhaseScope<Solution_> phaseScope) {
         super.phaseStarted(phaseScope);
         nextSynchronizedOperation = new AtomicReference<>();
-        remainingThreadsToTakeNextSynchronizedOperation = new AtomicInteger(moveThreadCount);
+        nextSynchronizedOperationIndex = new AtomicInteger(0);
         // Capacity: number of moves in circulation + number of exception handling results
         resultQueue = new OrderByMoveIndexBlockingQueue<>(moveThreadCount, selectedMoveBufferSize + moveThreadCount);
-        moveThreadBarrier = new CyclicBarrier(moveThreadCount);
         moveIndex = new AtomicInteger(0);
         iteratorReference = new AtomicReferenceArray<>(moveThreadCount);
         InnerScoreDirector<Solution_, ?> scoreDirector = phaseScope.getScoreDirector();
@@ -96,7 +99,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         for (int moveThreadIndex = 0; moveThreadIndex < moveThreadCount; moveThreadIndex++) {
             MoveThreadRunner<Solution_, ?> moveThreadRunner = new MoveThreadRunner<>(
                     logIndentation, moveThreadIndex, true,
-                    nextSynchronizedOperation, remainingThreadsToTakeNextSynchronizedOperation, resultQueue, moveThreadBarrier,
+                    nextSynchronizedOperation, nextSynchronizedOperationIndex, resultQueue,
                     moveIndex, iteratorReference,
                     assertMoveScoreFromScratch, assertExpectedUndoMoveScore,
                     assertStepScoreFromScratch, assertExpectedStepScore, assertShadowVariablesAreNotStaleAfterStep);
@@ -112,7 +115,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         // Don't clear the operationsQueue to avoid moveThreadBarrier deadlock:
         // The MoveEvaluationOperations are already cleared and the new ApplyStepOperation isn't added yet.
         DestroyOperation<Solution_> destroyOperation = new DestroyOperation<>();
-        remainingThreadsToTakeNextSynchronizedOperation.set(moveThreadCount);
+        nextSynchronizedOperationIndex.set(-2);
         nextSynchronizedOperation.set(destroyOperation);
         resultQueue.endPhase();
         shutdownMoveThreads();
@@ -122,7 +125,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         }
         phaseScope.addChildThreadsScoreCalculationCount(childThreadsScoreCalculationCount);
         nextSynchronizedOperation = null;
-        remainingThreadsToTakeNextSynchronizedOperation = null;
+        nextSynchronizedOperationIndex = null;
         resultQueue = null;
         moveThreadRunnerList = null;
     }
@@ -172,8 +175,9 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         resultQueue.deciderSyncOnEnd();
 
         // Set Random state to a deterministic value
+        Random originalWorkingRandom = stepScope.getWorkingRandom();
         for (int i = 0; i < workingRandomList.size(); i++) {
-            workingRandomList.get(i).setSeed(((long) stepIndex << 32L) | (i ^ stepScope.getSelectedMoveCount()));
+            workingRandomList.get(i).setSeed(originalWorkingRandom.nextLong());
         }
         if (stepScope.getStep() != null) {
             InnerScoreDirector<Solution_, ?> scoreDirector = stepScope.getScoreDirector();
@@ -185,7 +189,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
             // Increase stepIndex by 1, because it's a preliminary action
             ApplyStepOperation<Solution_, ?> stepOperation = new ApplyStepOperation<>(stepIndex + 1,
                     stepScope.getStep(), (Score) stepScope.getScore());
-            remainingThreadsToTakeNextSynchronizedOperation.set(moveThreadCount);
+            nextSynchronizedOperationIndex.set(stepIndex + 1);
             nextSynchronizedOperation.set(stepOperation);
         }
     }

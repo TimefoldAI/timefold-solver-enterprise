@@ -3,7 +3,10 @@ package ai.timefold.solver.enterprise.core.multithreaded;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.*;
 
 import ai.timefold.solver.core.api.domain.solution.PlanningSolution;
@@ -34,9 +37,8 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
     private boolean assertShadowVariablesAreNotStaleAfterStep = false;
 
     private AtomicReference<MoveThreadOperation<Solution_>> nextSynchronizedOperation;
-    private AtomicInteger remainingThreadsToTakeNextSynchronizedOperation;
+    private AtomicInteger nextSynchronizedOperationIndex;
     private OrderByMoveIndexBlockingQueue<Solution_> resultQueue;
-    private CyclicBarrier moveThreadBarrier;
     private AtomicInteger moveIndex;
     private AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference;
     private ExecutorService executor;
@@ -67,10 +69,9 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
     public void phaseStarted(ConstructionHeuristicPhaseScope<Solution_> phaseScope) {
         super.phaseStarted(phaseScope);
         nextSynchronizedOperation = new AtomicReference<>();
-        remainingThreadsToTakeNextSynchronizedOperation = new AtomicInteger(moveThreadCount);
+        nextSynchronizedOperationIndex = new AtomicInteger(0);
         // Capacity: number of moves in circulation + number of exception handling results
         resultQueue = new OrderByMoveIndexBlockingQueue<>(moveThreadCount, selectedMoveBufferSize + moveThreadCount);
-        moveThreadBarrier = new CyclicBarrier(moveThreadCount);
         moveIndex = new AtomicInteger(0);
         iteratorReference = new AtomicReferenceArray<>(moveThreadCount);
         InnerScoreDirector<Solution_, ?> scoreDirector = phaseScope.getScoreDirector();
@@ -78,11 +79,10 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
         moveThreadRunnerList = new ArrayList<>(moveThreadCount);
 
         nextSynchronizedOperation.set(new SetupOperation<>(scoreDirector));
-        remainingThreadsToTakeNextSynchronizedOperation.set(moveThreadCount);
         for (int moveThreadIndex = 0; moveThreadIndex < moveThreadCount; moveThreadIndex++) {
             MoveThreadRunner<Solution_, ?> moveThreadRunner = new MoveThreadRunner<>(
                     logIndentation, moveThreadIndex, false,
-                    nextSynchronizedOperation, remainingThreadsToTakeNextSynchronizedOperation, resultQueue, moveThreadBarrier,
+                    nextSynchronizedOperation, nextSynchronizedOperationIndex, resultQueue,
                     moveIndex, iteratorReference,
                     assertMoveScoreFromScratch, assertExpectedUndoMoveScore,
                     assertStepScoreFromScratch, assertExpectedStepScore, assertShadowVariablesAreNotStaleAfterStep);
@@ -99,7 +99,7 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
         // The MoveEvaluationOperations are already cleared and the new ApplyStepOperation isn't added yet.
         DestroyOperation<Solution_> destroyOperation = new DestroyOperation<>();
         // Setting over here does not work, but incrementAndGet does
-        remainingThreadsToTakeNextSynchronizedOperation.set(moveThreadCount);
+        nextSynchronizedOperationIndex.set(-2);
         nextSynchronizedOperation.set(destroyOperation);
         resultQueue.endPhase();
         shutdownMoveThreads();
@@ -109,7 +109,7 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
         }
         phaseScope.addChildThreadsScoreCalculationCount(childThreadsScoreCalculationCount);
         nextSynchronizedOperation = null;
-        remainingThreadsToTakeNextSynchronizedOperation = null;
+        nextSynchronizedOperationIndex = null;
         resultQueue = null;
         moveThreadRunnerList = null;
     }
@@ -178,7 +178,7 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
             // Increase stepIndex by 1, because it's a preliminary action
             ApplyStepOperation<Solution_, ?> stepOperation = new ApplyStepOperation<>(stepIndex + 1,
                     stepScope.getStep(), (Score) stepScope.getScore());
-            remainingThreadsToTakeNextSynchronizedOperation.set(moveThreadCount);
+            nextSynchronizedOperationIndex.set(stepIndex + 1);
             nextSynchronizedOperation.set(stepOperation);
         }
     }

@@ -1,7 +1,5 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
-import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -24,9 +22,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
     private final boolean evaluateDoable;
 
     private final AtomicReference<MoveThreadOperation<Solution_>> nextSynchronizedOperation;
-    private final AtomicInteger remainingThreadsToTakeNextSynchronizedOperation;
+    private final AtomicInteger synchronizedOperationIndex;
     private final OrderByMoveIndexBlockingQueue<Solution_> resultQueue;
-    private final CyclicBarrier moveThreadBarrier;
     private final AtomicInteger moveIndex;
     private final AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference;
 
@@ -41,9 +38,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
 
     public MoveThreadRunner(String logIndentation, int moveThreadIndex, boolean evaluateDoable,
             AtomicReference<MoveThreadOperation<Solution_>> nextSynchronizedOperation,
-            AtomicInteger remainingThreadsToTakeNextSynchronizedOperation,
+            AtomicInteger synchronizedOperationIndex,
             OrderByMoveIndexBlockingQueue<Solution_> resultQueue,
-            CyclicBarrier moveThreadBarrier,
             AtomicInteger moveIndex,
             AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference,
             boolean assertMoveScoreFromScratch, boolean assertExpectedUndoMoveScore,
@@ -53,9 +49,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
         this.moveThreadIndex = moveThreadIndex;
         this.evaluateDoable = evaluateDoable;
         this.nextSynchronizedOperation = nextSynchronizedOperation;
-        this.remainingThreadsToTakeNextSynchronizedOperation = remainingThreadsToTakeNextSynchronizedOperation;
+        this.synchronizedOperationIndex = synchronizedOperationIndex;
         this.resultQueue = resultQueue;
-        this.moveThreadBarrier = moveThreadBarrier;
         this.moveIndex = moveIndex;
         this.iteratorReference = iteratorReference;
         this.assertMoveScoreFromScratch = assertMoveScoreFromScratch;
@@ -75,11 +70,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
             // Wait for the iteratorLock to be available before entering the loop
             while (true) {
                 MoveThreadOperation<Solution_> operation;
-                operation = nextSynchronizedOperation.get();
-                if (operation != null) {
-                    if (remainingThreadsToTakeNextSynchronizedOperation.decrementAndGet() == 0) {
-                        nextSynchronizedOperation.set(null);
-                    }
+                if (synchronizedOperationIndex.get() != stepIndex) {
+                    operation = nextSynchronizedOperation.get();
                 } else {
                     generatedMoveIndex = moveIndex.getAndIncrement();
                     NeverEndingMoveGenerator<Solution_> neverEndingMoveGenerator =
@@ -107,13 +99,6 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                     lastStepScore = scoreDirector.calculateScore();
                     LOGGER.trace("{}            Move thread ({}) setup: step index ({}), score ({}).",
                             logIndentation, moveThreadIndex, stepIndex, lastStepScore);
-                    try {
-                        // Don't consume another operation until every moveThread took this SetupOperation
-                        moveThreadBarrier.await();
-                    } catch (InterruptedException | BrokenBarrierException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
                 } else if (operation instanceof DestroyOperation) {
                     LOGGER.trace("{}            Move thread ({}) destroy: step index ({}).",
                             logIndentation, moveThreadIndex, stepIndex);
@@ -139,13 +124,6 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                     lastStepScore = score;
                     LOGGER.trace("{}            Move thread ({}) step: step index ({}), score ({}).",
                             logIndentation, moveThreadIndex, stepIndex, lastStepScore);
-                    try {
-                        // Don't consume an MoveEvaluationOperation until every moveThread took this ApplyStepOperation
-                        moveThreadBarrier.await();
-                    } catch (InterruptedException | BrokenBarrierException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
                 } else if (operation instanceof MoveEvaluationOperation<Solution_> moveEvaluationOperation) {
                     int moveIndex = moveEvaluationOperation.getMoveIndex();
                     if (stepIndex != moveEvaluationOperation.getStepIndex()) {
