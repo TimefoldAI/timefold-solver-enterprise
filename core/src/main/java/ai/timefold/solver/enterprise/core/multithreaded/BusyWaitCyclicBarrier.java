@@ -25,20 +25,14 @@ final class BusyWaitCyclicBarrier {
         if (waitingParties.incrementAndGet() == parties) {
             finishedParties.incrementAndGet();
             waitingParties.set(0);
-            long startTime = System.nanoTime();
             while (finishedParties.get() > 0) {
                 if (isReset.get()) {
                     throw new BrokenBarrierException();
                 }
-                if (System.nanoTime() - startTime > 10_000) {
-                    Thread.sleep(0L, 1);
-                    startTime = System.nanoTime();
-                }
+                Thread.onSpinWait();
             }
             return;
         }
-        // Busy Wait
-        long startTime = System.nanoTime();
         while (waitingParties.get() > 0) {
             if (isReset.get()) {
                 if (waitingParties.decrementAndGet() == 0) {
@@ -46,24 +40,17 @@ final class BusyWaitCyclicBarrier {
                 }
                 throw new BrokenBarrierException();
             }
-            if (System.nanoTime() - startTime > 10_000) {
-                Thread.sleep(0L, 1);
-                startTime = System.nanoTime();
-            }
+            Thread.onSpinWait();
         }
         if (finishedParties.incrementAndGet() == parties) {
             finishedParties.set(0);
             return;
         }
-        startTime = System.nanoTime();
         while (finishedParties.get() > 0) {
             if (isReset.get()) {
                 throw new BrokenBarrierException();
             }
-            if (System.nanoTime() - startTime > 10_000) {
-                Thread.sleep(0L, 1);
-                startTime = System.nanoTime();
-            }
+            Thread.onSpinWait();
         }
     }
 

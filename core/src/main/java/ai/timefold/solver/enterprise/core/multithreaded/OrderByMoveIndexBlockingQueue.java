@@ -2,7 +2,6 @@ package ai.timefold.solver.enterprise.core.multithreaded;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
@@ -13,8 +12,8 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
     private final AtomicReferenceArray<MoveResult<Solution_>> moveResultRingBuffer;
 
     // Semaphores are reused/never change, and thus don't need to be in an AtomicReferenceArray
-    private final Semaphore[] spaceAvailableInRingBufferSemaphores;
-    private final Semaphore[] resultAvailableInRingBufferSemaphores;
+    private final BusyWaitSemaphore[] spaceAvailableInRingBufferSemaphores;
+    private final BusyWaitSemaphore[] resultAvailableInRingBufferSemaphores;
     private final BusyWaitCyclicBarrier syncDeciderAndMoveThreadsStartBarrier;
     private final BusyWaitCyclicBarrier syncDeciderAndMoveThreadsEndBarrier;
     private final AtomicBoolean syncDeciderAndMoveThreads;
@@ -29,11 +28,11 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
         syncDeciderAndMoveThreads = new AtomicBoolean(false);
 
         moveResultRingBuffer = new AtomicReferenceArray<>(capacity);
-        spaceAvailableInRingBufferSemaphores = new Semaphore[capacity];
-        resultAvailableInRingBufferSemaphores = new Semaphore[capacity];
+        spaceAvailableInRingBufferSemaphores = new BusyWaitSemaphore[capacity];
+        resultAvailableInRingBufferSemaphores = new BusyWaitSemaphore[capacity];
         for (int i = 0; i < capacity; i++) {
-            spaceAvailableInRingBufferSemaphores[i] = new Semaphore(1);
-            resultAvailableInRingBufferSemaphores[i] = new Semaphore(0);
+            spaceAvailableInRingBufferSemaphores[i] = new BusyWaitSemaphore(1);
+            resultAvailableInRingBufferSemaphores[i] = new BusyWaitSemaphore(0);
         }
     }
 
@@ -65,10 +64,10 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
             resultAvailableInRingBufferSemaphores[i].drainPermits();
         }
 
-        for (Semaphore spaceAvailableInRingBufferSemaphore : spaceAvailableInRingBufferSemaphores) {
+        for (BusyWaitSemaphore spaceAvailableInRingBufferSemaphore : spaceAvailableInRingBufferSemaphores) {
             // make each semaphore have exactly 1 permit available
             spaceAvailableInRingBufferSemaphore.drainPermits();
-            spaceAvailableInRingBufferSemaphore.release(1);
+            spaceAvailableInRingBufferSemaphore.release();
         }
         nextMoveIndex = 0;
         syncDeciderAndMoveThreads.setRelease(false);
@@ -209,7 +208,7 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
             int threadCount = syncDeciderAndMoveThreadsEndBarrier.getParties();
             // Need to release permits for results we have not consumed so all threads
             // will reach barrier
-            for (Semaphore semaphore : spaceAvailableInRingBufferSemaphores) {
+            for (BusyWaitSemaphore semaphore : spaceAvailableInRingBufferSemaphores) {
                 semaphore.release(threadCount);
             }
             syncDeciderAndMoveThreadsEndBarrier.await();
