@@ -94,15 +94,19 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
     @Override
     public void phaseEnded(ConstructionHeuristicPhaseScope<Solution_> phaseScope) {
         super.phaseEnded(phaseScope);
-        // Tell the move thread runners to stop
-        // Don't clear the operationsQueue to avoid moveThreadBarrier deadlock:
-        // The MoveEvaluationOperations are already cleared and the new ApplyStepOperation isn't added yet.
         DestroyOperation<Solution_> destroyOperation = new DestroyOperation<>();
-        // Setting over here does not work, but incrementAndGet does
+        // Set to -2, since unless step index overflows, no stepIndex in MoveThreadRunner
+        // will be equal to it (it is set to -1 initially, so cannot use that).
         nextSynchronizedOperationIndex.set(-2);
         nextSynchronizedOperation.set(destroyOperation);
+
+        // Unblock the Move Threads, so they will get the DestroyOperation
         resultQueue.endPhase();
+
+        // Wait for all Move Threads to consume the DestroyOperation
         shutdownMoveThreads();
+
+        // Update the scoreCalculationCount
         long childThreadsScoreCalculationCount = 0;
         for (MoveThreadRunner<Solution_, ?> moveThreadRunner : moveThreadRunnerList) {
             childThreadsScoreCalculationCount += moveThreadRunner.getCalculationCount();
@@ -136,20 +140,39 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
         int stepIndex = stepScope.getStepIndex();
 
         int selectMoveIndex = 0;
+
+        // Placement does not have a way to create multiple independent MoveSelectors,
+        // so we will use a shared NeverEndingMoveGenerator in the Construction Heuristic
         AtomicLong hasNextRemaining;
         AtomicBoolean hasNextShared;
         Iterator<Move<Solution_>> sharedIterator;
+
+        // 1 distinct generator -> hasNextRemaining = 1
         hasNextRemaining = new AtomicLong(1);
         hasNextShared = new AtomicBoolean(true);
         sharedIterator = placement.iterator();
-        SharedNeverEndingMoveGenerator<Solution_> sharedGenerator = new SharedNeverEndingMoveGenerator<>(hasNextRemaining,
+
+        // offset 0, increment 1, to generate indices [0, 1, 2, 3, ...]
+        // since there is only one NeverEndingMoveGenerator
+        NeverEndingMoveGenerator<Solution_> sharedGenerator = new NeverEndingMoveGenerator<>(hasNextRemaining,
                 resultQueue, sharedIterator, hasNextShared, 0, 1);
         for (int i = 0; i < moveThreadCount; i++) {
             iteratorReference.set(i, sharedGenerator);
         }
         moveIndex.set(0);
+
+        // All variables set up, unblock move generators
         resultQueue.startNextStep(stepIndex);
+
+        // moveIndex = number of generated moves so far
+        // selectMoveIndex = number of moves foraged so far
+        // if selectMoveIndex < moveIndex, then we still want to forage
+        // even if the resultQueue is blocking (as there are moves waiting
+        // in the resultQueue that we haven't consumed).
+        // If the resultQueue is blocking, that mean the iterator is exhausted
+        // and no more moves will come in
         while (selectMoveIndex < moveIndex.get() || !resultQueue.checkIfBlocking()) {
+            // Forage the next move from the result queue
             if (forageResult(stepScope, stepIndex)) {
                 break;
             }
@@ -160,7 +183,8 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
         resultQueue.blockMoveThreads();
 
         pickMove(stepScope);
-        // Start doing the step on every move thread. Don't wait for the stepEnded() event.
+
+        // Wait for all threads to finish evaluating moves
         resultQueue.deciderSyncOnEnd();
 
         // Set Random state to a deterministic value
@@ -168,6 +192,7 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
                 .getSolverScope()
                 .getWorkingRandom()
                 .setSeed(((long) stepIndex << 32L) | stepScope.getSelectedMoveCount());
+
         if (stepScope.getStep() != null) {
             InnerScoreDirector<Solution_, ?> scoreDirector = stepScope.getScoreDirector();
             if (scoreDirector.requiresFlushing() && stepIndex % 100 == 99) {
@@ -191,7 +216,9 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
             Thread.currentThread().interrupt();
             return true;
         }
+
         if (result == null) {
+            // The iterator is exhausted
             stepScope.getPhaseScope().getSolverScope().checkYielding();
             return termination.isPhaseTerminated(stepScope.getPhaseScope());
         }

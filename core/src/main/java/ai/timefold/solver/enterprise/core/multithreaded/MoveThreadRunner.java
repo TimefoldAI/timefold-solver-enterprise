@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 import ai.timefold.solver.core.api.score.Score;
+import ai.timefold.solver.core.api.score.director.ScoreDirector;
 import ai.timefold.solver.core.impl.heuristic.move.Move;
 import ai.timefold.solver.core.impl.score.director.InnerScoreDirector;
 import ai.timefold.solver.core.impl.solver.thread.ChildThreadType;
@@ -19,12 +20,75 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
 
     private final String logIndentation;
     private final int moveThreadIndex;
+    /**
+     * If {@link Move#isMoveDoable(ScoreDirector)} should be called before a move is evaluated.
+     */
     private final boolean evaluateDoable;
 
+    /**
+     * The next synchronized operation to take. A synchronized operation syncs a
+     * {@link MoveThreadRunner} to either a {@link MultiThreadedConstructionHeuristicDecider}
+     * or a {@link MultiThreadedLocalSearchDecider}. The synchronized operations are:
+     *
+     * <ul>
+     * <li>
+     * {@link SetupOperation}, used to create a child score director
+     * </li>
+     * <li>
+     * {@link ApplyStepOperation}, used to update the working solution to match
+     * the step taken.
+     * </li>
+     * <li>
+     * {@link DestroyOperation}, used to terminate this {@link MoveThreadRunner}.
+     * </li>
+     * </ul>
+     */
     private final AtomicReference<MoveThreadOperation<Solution_>> nextSynchronizedOperation;
+
+    /**
+     * The step index of the current {@link #nextSynchronizedOperation}. If it does
+     * not match the stepIndex in {@link #run()}, then that means it is a new
+     * synchronized operation that need to be taken before evaluating new moves.
+     */
     private final AtomicInteger synchronizedOperationIndex;
+
+    /**
+     * A result queue used to put the result of move evaluation which blocks
+     * when:
+     *
+     * <ul>
+     * <li>There is no space in the queue</li>
+     * <li>A synchronized operation need to be taken</li>
+     * </ul>
+     */
     private final OrderByMoveIndexBlockingQueue<Solution_> resultQueue;
+
+    /**
+     * The total number of moves that are generated in this step so far
+     * (including moves to be generated).
+     */
     private final AtomicInteger moveIndex;
+
+    /**
+     * An array of {@link NeverEndingMoveGenerator} to use when generating a move.
+     * There are two cases:
+     *
+     * <ul>
+     * <li>
+     * When {@link MultiThreadedConstructionHeuristicDecider} is used, all items
+     * in the array points to the same {@link NeverEndingMoveGenerator} (since
+     * {@link ai.timefold.solver.core.impl.constructionheuristic.placer.Placement}
+     * does not have a method to return multiple iterators).
+     * </li>
+     * <li>
+     * When {@link MultiThreadedLocalSearchDecider} is used, all items in the array
+     * points to distinct {@link NeverEndingMoveGenerator}.
+     * </li>
+     * </ul>
+     *
+     * The {@link NeverEndingMoveGenerator} are not thread-safe, and thus should be synchronized
+     * on when accessed.
+     */
     private final AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference;
 
     private final boolean assertMoveScoreFromScratch;
@@ -71,17 +135,45 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
             while (true) {
                 MoveThreadOperation<Solution_> operation;
                 if (synchronizedOperationIndex.get() != stepIndex) {
+                    // Our stepIndex is out of sync with the decider's step index,
+                    // so we should take the nextSynchronizedOperation
+                    // Note: we do not clear nextSynchronizedOperation, since it
+                    // is a small object, and will be cleared when the next
+                    // synchronized operation is set.
                     operation = nextSynchronizedOperation.get();
                 } else {
+                    // Our stepIndex is in sync with the decider's step index,
+                    // so we should generate and evaluate a new move
+
+                    // First, get our "ideal" move index, so we know what iterator
+                    // to use
                     generatedMoveIndex = moveIndex.getAndIncrement();
+
+                    // There is no "atomic add and mod", so we atomically increment and mod
+                    // after (this can cause issues if moveIndex ever exceeds Integer.MAX_VALUE,
+                    // but that should never happen)
                     NeverEndingMoveGenerator<Solution_> neverEndingMoveGenerator =
                             iteratorReference.get(generatedMoveIndex % iteratorReference.length());
+
+                    // synchronize on the neverEndingMoveGenerator, so if a move evaluation
+                    // was particular fast and another MoveThreadRunner got the same iterator,
+                    // it will wait for this MoveThreadRunner to finish generating the Move
+                    // before entering this block.
                     synchronized (neverEndingMoveGenerator) {
+                        // Get the actual move index, since the first Thread to reach
+                        // a synchronized block is not necessary the first thread to enter
+                        // it. This will be generatedMoveIndex plus a multiple of the number
+                        // of distinct generators in iteratorReference
                         generatedMoveIndex = neverEndingMoveGenerator.getNextMoveIndex();
                         LOGGER.trace(
                                 "{}            Move thread ({}) step: step index ({}), move index ({}) Generating move.",
                                 logIndentation, moveThreadIndex, stepIndex, generatedMoveIndex);
+                        // Block until space is available for the given move index. It is important to
+                        // block here and not when putting a result to prevent a deadlock (I think;
+                        // it has been a while since when I moved the blocking from addMove to here).
                         resultQueue.reserveSpaceForMove(generatedMoveIndex);
+
+                        // Generate the MoveEvaluationOperation
                         operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex,
                                 neverEndingMoveGenerator.generateNextMove());
                         LOGGER.trace(
@@ -95,6 +187,7 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                     SetupOperation<Solution_, Score_> setupOperation = (SetupOperation<Solution_, Score_>) operation;
                     scoreDirector = setupOperation.getScoreDirector()
                             .createChildThreadScoreDirector(ChildThreadType.MOVE_THREAD);
+                    // stepIndex is 0 because this is the first operation performed in a phase
                     stepIndex = 0;
                     lastStepScore = scoreDirector.calculateScore();
                     LOGGER.trace("{}            Move thread ({}) setup: step index ({}), score ({}).",
@@ -102,13 +195,16 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                 } else if (operation instanceof DestroyOperation) {
                     LOGGER.trace("{}            Move thread ({}) destroy: step index ({}).",
                             logIndentation, moveThreadIndex, stepIndex);
+                    // Set this calculationCount to the scoreDirector's calculation count, so
+                    // the solver can report an accurate score calculation speed.
                     calculationCount.set(scoreDirector.getCalculationCount());
                     break;
                 } else if (operation instanceof ApplyStepOperation) {
-                    // TODO Performance gain with specialized 2-phase cyclic barrier:
-                    // As soon as the last move thread has taken its ApplyStepOperation,
-                    // other move threads can already depart from the moveThreadStepBarrier: no need to wait until the step is done.
                     // Cannot be replaced by pattern variable; "cannot be safely cast" because of parameterization
+                    // Because threads do not take operations from a queue, but instead look at the current
+                    // nextSynchronizedOperation and synchronizedOperationIndex, the thread does not need
+                    // to wait for other threads to consume the current synchronized operation before
+                    // generating moves
                     ApplyStepOperation<Solution_, Score_> applyStepOperation =
                             (ApplyStepOperation<Solution_, Score_>) operation;
                     if (stepIndex + 1 != applyStepOperation.getStepIndex()) {
@@ -134,6 +230,9 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                     }
                     Move<Solution_> move = moveEvaluationOperation.getMove();
                     if (move == null) {
+                        // If the generated move is null, this mean the iterator is exhausted.
+                        // We call reportIteratorExhausted so the thread will be blocked
+                        // when all iterators are exhausted or if the decider picked a move.
                         LOGGER.trace(
                                 "{}            Move thread ({}) evaluation: step index ({}), move index ({}), iterator exhausted.",
                                 logIndentation, moveThreadIndex, stepIndex, moveIndex);
@@ -155,7 +254,8 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                     }
                     LOGGER.trace("{}            Move thread ({}) evaluation: step index ({}), move index ({}), score ({}).",
                             logIndentation, moveThreadIndex, stepIndex, moveIndex, score);
-                    // Deliberately add to fail fast if there is not enough capacity (which is impossible)
+                    // This will block if there is a new synchronized operation to be taken
+                    // (i.e. all iterators exhausted OR decider picked a move)
                     resultQueue.addMove(moveThreadIndex, stepIndex, moveIndex, move, score);
                 } else {
                     throw new IllegalStateException("Unknown operation (" + operation + ").");
