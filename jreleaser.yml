@@ -37,7 +37,7 @@ deploy:
     github:
       timefold-solver-enterprise:
         active: ALWAYS
-        url: "https://maven.pkg.github.com/TimefoldAI/timefold-solver-enterprise//"
+        url: "https://timefold.jfrog.io/artifactory/enterprise-libs-release//"
         # TODO Remove verifyPom tag, hack for https://github.com/jreleaser/jreleaser/issues/1397
         verifyPom: false
         applyMavenCentralRules: true
