@@ -43,6 +43,8 @@ deploy:
         active: ALWAYS
         url: "https://timefold.jfrog.io/artifactory/enterprise-libs-release//"
         applyMavenCentralRules: true
+        # TODO Remove verifyPom tag, hack for https://github.com/jreleaser/jreleaser/issues/1397
+        verifyPom: false
         stagingRepositories:
           - "target/staging-deploy"
         artifactOverrides:
