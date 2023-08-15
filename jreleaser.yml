@@ -34,13 +34,12 @@ deploy:
   maven:
     pomchecker:
       version: 1.9.0
-    github:
-      timefold-solver-enterprise:
+    nexus2:
+      maven-central:
         active: ALWAYS
         url: "https://timefold.jfrog.io/artifactory/enterprise-libs-release//"
-        # TODO Remove verifyPom tag, hack for https://github.com/jreleaser/jreleaser/issues/1397
-        verifyPom: false
-        applyMavenCentralRules: true
+        closeRepository: true
+        releaseRepository: false
         stagingRepositories:
           - "target/staging-deploy"
         artifactOverrides:
