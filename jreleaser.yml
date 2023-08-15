@@ -38,12 +38,11 @@ deploy:
   maven:
     pomchecker:
       version: 1.9.0
-    nexus2:
-      maven-central:
+    artifactory:
+      release:
         active: ALWAYS
         url: "https://timefold.jfrog.io/artifactory/enterprise-libs-release//"
-        closeRepository: true
-        releaseRepository: false
+        applyMavenCentralRules: true
         stagingRepositories:
           - "target/staging-deploy"
         artifactOverrides:

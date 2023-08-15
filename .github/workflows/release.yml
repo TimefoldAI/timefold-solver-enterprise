@@ -97,8 +97,8 @@ jobs:
           JRELEASER_GPG_PASSPHRASE: ${{ secrets.JRELEASER_GPG_PASSPHRASE }}
           JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.JRELEASER_GPG_PUBLIC_KEY }}
           JRELEASER_GPG_SECRET_KEY: ${{ secrets.JRELEASER_GPG_SECRET_KEY }}
-          JRELEASER_NEXUS2_USERNAME: ${{ secrets.JRELEASER_JFROG_USERNAME }}
-          JRELEASER_NEXUS2_PASSWORD: ${{ secrets.JRELEASER_JFROG_TOKEN }}
+          JRELEASER_ARTIFACTORY_USERNAME: ${{ secrets.JRELEASER_JFROG_USERNAME }}
+          JRELEASER_ARTIFACTORY_PASSWORD: ${{ secrets.JRELEASER_JFROG_TOKEN }}
 
       - name: JReleaser release output
         uses: actions/upload-artifact@v3
