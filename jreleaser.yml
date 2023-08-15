@@ -1,3 +1,7 @@
+project:
+  java:
+    groupId: "ai.timefold.solver.enterprise"
+
 signing:
   active: ALWAYS
   armored: true
