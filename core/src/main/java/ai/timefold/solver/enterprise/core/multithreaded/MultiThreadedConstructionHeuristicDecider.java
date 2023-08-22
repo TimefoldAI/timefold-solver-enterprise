@@ -41,6 +41,7 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
     private OrderByMoveIndexBlockingQueue<Solution_> resultQueue;
     private AtomicInteger moveIndex;
     private AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference;
+    private AtomicBoolean stepDecided;
     private ExecutorService executor;
     private List<MoveThreadRunner<Solution_, ?>> moveThreadRunnerList;
 
@@ -70,8 +71,10 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
         super.phaseStarted(phaseScope);
         nextSynchronizedOperation = new AtomicReference<>();
         nextSynchronizedOperationIndex = new AtomicInteger(0);
+        stepDecided = new AtomicBoolean(false);
         // Capacity: number of moves in circulation + number of exception handling results
-        resultQueue = new OrderByMoveIndexBlockingQueue<>(moveThreadCount, selectedMoveBufferSize + moveThreadCount);
+        resultQueue =
+                new OrderByMoveIndexBlockingQueue<>(stepDecided, moveThreadCount, selectedMoveBufferSize + moveThreadCount);
         moveIndex = new AtomicInteger(0);
         iteratorReference = new AtomicReferenceArray<>(moveThreadCount);
         InnerScoreDirector<Solution_, ?> scoreDirector = phaseScope.getScoreDirector();
@@ -83,7 +86,7 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
             MoveThreadRunner<Solution_, ?> moveThreadRunner = new MoveThreadRunner<>(
                     logIndentation, moveThreadIndex, false,
                     nextSynchronizedOperation, nextSynchronizedOperationIndex, resultQueue,
-                    moveIndex, iteratorReference,
+                    moveIndex, iteratorReference, stepDecided,
                     assertMoveScoreFromScratch, assertExpectedUndoMoveScore,
                     assertStepScoreFromScratch, assertExpectedStepScore, assertShadowVariablesAreNotStaleAfterStep);
             moveThreadRunnerList.add(moveThreadRunner);
@@ -155,11 +158,13 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
         // offset 0, increment 1, to generate indices [0, 1, 2, 3, ...]
         // since there is only one NeverEndingMoveGenerator
         NeverEndingMoveGenerator<Solution_> sharedGenerator = new NeverEndingMoveGenerator<>(hasNextRemaining,
-                resultQueue, sharedIterator, hasNextShared, 0, 1);
+                resultQueue, sharedIterator, hasNextShared, stepDecided,
+                0, 1, selectedMoveBufferSize);
         for (int i = 0; i < moveThreadCount; i++) {
             iteratorReference.set(i, sharedGenerator);
         }
         moveIndex.set(0);
+        stepDecided.set(false);
 
         // All variables set up, unblock move generators
         resultQueue.startNextStep(stepIndex);
@@ -176,22 +181,14 @@ final class MultiThreadedConstructionHeuristicDecider<Solution_> extends Constru
             if (forageResult(stepScope, stepIndex)) {
                 break;
             }
+            sharedGenerator.incrementPermits();
             selectMoveIndex++;
         }
-
-        // Do not evaluate the remaining selected moves for this step that haven't started evaluation yet
-        resultQueue.blockMoveThreads();
-
+        stepDecided.set(true);
         pickMove(stepScope);
 
-        // Wait for all threads to finish evaluating moves
+        // Wait for all threads to finish generating and evaluating moves
         resultQueue.deciderSyncOnEnd();
-
-        // Set Random state to a deterministic value
-        stepScope.getPhaseScope()
-                .getSolverScope()
-                .getWorkingRandom()
-                .setSeed(((long) stepIndex << 32L) | stepScope.getSelectedMoveCount());
 
         if (stepScope.getStep() != null) {
             InnerScoreDirector<Solution_, ?> scoreDirector = stepScope.getScoreDirector();

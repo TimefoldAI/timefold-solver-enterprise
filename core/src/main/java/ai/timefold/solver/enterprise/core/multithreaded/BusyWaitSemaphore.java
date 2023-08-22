@@ -1,5 +1,6 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -49,6 +50,31 @@ final class BusyWaitSemaphore {
             current = availablePermits.getAcquire();
             Thread.onSpinWait();
         }
+    }
+
+    /**
+     * Thread-safe; acquire one permit if it available.
+     * If there are no permits available and condition is set,
+     * exits without acquiring a permit.
+     *
+     * @return true if a permit was acquired, false if there are no available permits
+     *         and condition is set.
+     */
+    public boolean acquireUntil(AtomicBoolean condition) {
+        // The thread will repeatedly get the current number of available permits,
+        // and if the number of available permits is greater than 0, it will attempt
+        // to decrement it by 1. The decrement will fail if the number of permits changes
+        // during the decrement. If it fails, it reacquires the number of available permits
+        // and try again. If it succeeds, it exits the loop.
+        int current = availablePermits.getAcquire();
+        while (current == 0 || !availablePermits.compareAndSet(current, current - 1)) {
+            current = availablePermits.getAcquire();
+            if (current == 0 && condition.getAcquire()) {
+                return false;
+            }
+            Thread.onSpinWait();
+        }
+        return true;
     }
 
     /**

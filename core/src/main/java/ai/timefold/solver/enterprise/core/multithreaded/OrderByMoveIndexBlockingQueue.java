@@ -76,6 +76,11 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
     private final AtomicBoolean syncDeciderAndMoveThreads;
 
     /**
+     * A boolean that is true when a step been decided.
+     */
+    final AtomicBoolean stepDecided;
+
+    /**
      * The index of the step to accept moves from. If the {@link MoveResult#stepIndex}
      * of a {@link MoveResult} does not match it, the move should not be added to
      * the {@link #moveResultRingBuffer}.
@@ -104,7 +109,9 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
      *        only additional memory usage (and an extremely minor time spent resetting
      *        additional {@link BusyWaitSemaphore} when a new step is taken).
      */
-    public OrderByMoveIndexBlockingQueue(int threadCount, int capacity) {
+    public OrderByMoveIndexBlockingQueue(AtomicBoolean stepDecided, int threadCount, int capacity) {
+        this.stepDecided = stepDecided;
+
         // all move threads + decider
         syncDeciderAndMoveThreadsStartBarrier = new BusyWaitCyclicBarrier(threadCount + 1);
         syncDeciderAndMoveThreadsEndBarrier = new BusyWaitCyclicBarrier(threadCount + 1);
@@ -185,27 +192,7 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
     }
 
     /**
-     * Called by a {@link MoveThreadRunner} to reserve space for a
-     * {@link Move}. Blocks until space is available in the slot
-     * corresponding to the given move index.
-     *
-     * @param index The move index of the generated move, at least 0, unbounded
-     */
-    public void reserveSpaceForMove(int index) {
-        // Take the index modulo the ring buffer size to get the corresponding
-        // buffer index
-        int ringBufferSlot = index % moveResultRingBuffer.length();
-        try {
-            // Wait until space is available
-            spaceAvailableInRingBufferSemaphores[ringBufferSlot].acquire();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
      * This method is thread-safe. It can be called from any Move Thread.
-     * {@link #reserveSpaceForMove(int)} must be called prior to this method.
      *
      * @param moveThreadIndex {@code 0 <= moveThreadIndex < moveThreadCount}
      * @param stepIndex at least 0
@@ -220,36 +207,21 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
         MoveResult<Solution_> result = new MoveResult<>(moveThreadIndex, stepIndex, moveIndex, move, true, score);
         if (result.getStepIndex() != filterStepIndex) {
             // Discard element from previous step
-            spaceAvailableInRingBufferSemaphores[ringBufferSlot].release();
             return;
         }
 
-        // Space was reserved by reserveSpaceForMove, so we can immediately
-        // add the move to the buffer
-        moveResultRingBuffer.setRelease(ringBufferSlot, result);
+        if (spaceAvailableInRingBufferSemaphores[ringBufferSlot].acquireUntil(stepDecided)) {
+            // Do not override old elements if space was not available
+            moveResultRingBuffer.setRelease(ringBufferSlot, result);
 
-        // Tell the Solver Thread that a result is available in this slot
-        resultAvailableInRingBufferSemaphores[ringBufferSlot].release();
-
-        // Check if we should block for an upcoming synchronized operation
-        if (syncDeciderAndMoveThreads.getAcquire()) {
-            try {
-                // First, block here as the Solver Thread is waiting
-                // for all Move Threads to be finished using shared variables
-                syncDeciderAndMoveThreadsEndBarrier.await();
-
-                // Second, block here until the Solver Thread finished
-                // setting all shared variables
-                syncDeciderAndMoveThreadsStartBarrier.await();
-            } catch (InterruptedException | BrokenBarrierException e) {
-                throw new RuntimeException(e);
-            }
+            // Tell the Solver Thread that a result is available in this slot
+            resultAvailableInRingBufferSemaphores[ringBufferSlot].release();
         }
+        // All move threads will sync on reportIteratorExhausted
     }
 
     /**
      * This method is thread-safe. It can be called from any Move Thread.
-     * {@link #reserveSpaceForMove(int)} must be called prior to this method.
      *
      * @param stepIndex at least 0, unbounded
      * @param moveIndex at least 0, unbounded
@@ -260,16 +232,18 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
         int ringBufferSlot = moveIndex % moveResultRingBuffer.length();
         if (stepIndex != filterStepIndex) {
             // Discard element from previous step
-            spaceAvailableInRingBufferSemaphores[ringBufferSlot].release();
             return;
         }
-        // Space was reserved by reserveSpaceForMove, so we can immediately
-        // add null (a sentinel value used to report iterator exhaustion)
-        // to the buffer
-        moveResultRingBuffer.setRelease(ringBufferSlot, null);
 
-        // Tell the Solver Thread that a result is available in this slot
-        resultAvailableInRingBufferSemaphores[ringBufferSlot].release();
+        if (spaceAvailableInRingBufferSemaphores[ringBufferSlot].acquireUntil(stepDecided)) {
+            // Do not override old elements if space was not available
+            // add null (a sentinel value used to report iterator exhaustion)
+            // to the buffer
+            moveResultRingBuffer.setRelease(ringBufferSlot, null);
+
+            // Tell the Solver Thread that a result is available in this slot
+            resultAvailableInRingBufferSemaphores[ringBufferSlot].release();
+        }
 
         // Check if we should block for an upcoming synchronized operation
         if (syncDeciderAndMoveThreads.getAcquire()) {
@@ -302,6 +276,10 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
         MoveResult<Solution_> result = new MoveResult<>(moveThreadIndex, moveIndex, throwable);
         int ringBufferSlot = moveIndex % moveResultRingBuffer.length();
 
+        // Wait for space to be available
+        spaceAvailableInRingBufferSemaphores[ringBufferSlot].acquireUntil(stepDecided);
+
+        // Put an exception here regardless if we got a permit or not
         moveResultRingBuffer.setRelease(ringBufferSlot, result);
 
         // Tell the Solver Thread that a result (in this case, an error) is available in this slot
@@ -379,12 +357,6 @@ final class OrderByMoveIndexBlockingQueue<Solution_> {
      */
     public void deciderSyncOnEnd() {
         try {
-            int threadCount = syncDeciderAndMoveThreadsEndBarrier.getParties();
-            // Need to release permits for results we have not consumed so all threads
-            // will reach barrier
-            for (BusyWaitSemaphore semaphore : spaceAvailableInRingBufferSemaphores) {
-                semaphore.release(threadCount);
-            }
             syncDeciderAndMoveThreadsEndBarrier.await();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);

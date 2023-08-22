@@ -44,6 +44,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
     private OrderByMoveIndexBlockingQueue<Solution_> resultQueue;
     private AtomicInteger moveIndex;
     private AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference;
+    private AtomicBoolean stepDecided;
     private ExecutorService executor;
     private List<MoveThreadRunner<Solution_, ?>> moveThreadRunnerList;
 
@@ -87,8 +88,10 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         super.phaseStarted(phaseScope);
         nextSynchronizedOperation = new AtomicReference<>();
         nextSynchronizedOperationIndex = new AtomicInteger(0);
+        stepDecided = new AtomicBoolean(false);
         // Capacity: number of moves in circulation + number of exception handling results
-        resultQueue = new OrderByMoveIndexBlockingQueue<>(moveThreadCount, selectedMoveBufferSize + moveThreadCount);
+        resultQueue =
+                new OrderByMoveIndexBlockingQueue<>(stepDecided, moveThreadCount, selectedMoveBufferSize + moveThreadCount);
         moveIndex = new AtomicInteger(0);
         iteratorReference = new AtomicReferenceArray<>(moveThreadCount);
         InnerScoreDirector<Solution_, ?> scoreDirector = phaseScope.getScoreDirector();
@@ -100,7 +103,7 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
             MoveThreadRunner<Solution_, ?> moveThreadRunner = new MoveThreadRunner<>(
                     logIndentation, moveThreadIndex, true,
                     nextSynchronizedOperation, nextSynchronizedOperationIndex, resultQueue,
-                    moveIndex, iteratorReference,
+                    moveIndex, iteratorReference, stepDecided,
                     assertMoveScoreFromScratch, assertExpectedUndoMoveScore,
                     assertStepScoreFromScratch, assertExpectedStepScore, assertShadowVariablesAreNotStaleAfterStep);
             moveThreadRunnerList.add(moveThreadRunner);
@@ -169,10 +172,12 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
             // [2, 6, 10, ...]
             // [3, 7, 11, ...]
             NeverEndingMoveGenerator<Solution_> sharedGenerator = new NeverEndingMoveGenerator<>(hasNextRemaining,
-                    resultQueue, moveSelectorList.get(i).iterator(), new AtomicBoolean(true), i, moveThreadCount);
+                    resultQueue, moveSelectorList.get(i).iterator(), new AtomicBoolean(true), stepDecided,
+                    i, moveThreadCount, selectedMoveBufferSize / moveThreadCount);
             iteratorReference.set(i, sharedGenerator);
         }
         moveIndex.set(0);
+        stepDecided.set(false);
 
         // All variables set up, unblock move generators
         resultQueue.startNextStep(stepIndex);
@@ -188,22 +193,15 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
             if (forageResult(stepScope, stepIndex)) {
                 break;
             }
+            iteratorReference.get(selectMoveIndex % moveThreadCount).incrementPermits();
             selectMoveIndex++;
         }
-
-        // Do not evaluate the remaining selected moves for this step that haven't started evaluation yet
-        resultQueue.blockMoveThreads();
-
+        stepDecided.set(true);
         pickMove(stepScope);
 
-        // Wait for all threads to finish evaluating moves
+        // Wait for all threads to finish generating and evaluating moves
         resultQueue.deciderSyncOnEnd();
 
-        // Set Random state to a deterministic value
-        Random originalWorkingRandom = stepScope.getWorkingRandom();
-        for (int i = 0; i < workingRandomList.size(); i++) {
-            workingRandomList.get(i).setSeed(originalWorkingRandom.nextLong());
-        }
         if (stepScope.getStep() != null) {
             InnerScoreDirector<Solution_, ?> scoreDirector = stepScope.getScoreDirector();
             if (scoreDirector.requiresFlushing() && stepIndex % 100 == 99) {

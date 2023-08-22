@@ -42,6 +42,16 @@ final class NeverEndingMoveGenerator<Solution_> {
     final AtomicBoolean hasNext;
 
     /**
+     * A semaphore that keep track of how many iterator.next() calls are allowed.
+     */
+    final BusyWaitSemaphore nextCallsAllowedSemaphore;
+
+    /**
+     * A boolean that is true when a step been decided.
+     */
+    final AtomicBoolean stepDecided;
+
+    /**
      * How many units should {@link #nextMoveIndex} should increase by for
      * each move.
      */
@@ -58,19 +68,25 @@ final class NeverEndingMoveGenerator<Solution_> {
      * @param resultQueue The {@link OrderByMoveIndexBlockingQueue} where results are stored
      * @param delegateIterator The {@link Iterator} that generate new {@link Move}s.
      * @param hasNext A unique {@link AtomicBoolean} to store if the iterator has remaining elements
-     * @param offset The initial value of {@link #nextMoveIndex}
-     * @param increment How much {@link #nextMoveIndex} increments by for each generated move
+     * @param stepDecided A shared {@link AtomicBoolean} that tracks if a step has been decided
+     * @param offset The initial value of {@link #nextMoveIndex}. At least 0.
+     * @param increment How much {@link #nextMoveIndex} increments by for each generated move. At least 1.
+     * @param bufferSize How many iterator.next() calls should be buffered. At least 1.
      */
     NeverEndingMoveGenerator(AtomicLong hasNextRemaining,
             OrderByMoveIndexBlockingQueue<Solution_> resultQueue,
             Iterator<Move<Solution_>> delegateIterator,
             AtomicBoolean hasNext,
+            AtomicBoolean stepDecided,
             int offset,
-            int increment) {
+            int increment,
+            int bufferSize) {
         this.hasNextRemaining = hasNextRemaining;
         this.resultQueue = resultQueue;
         this.delegateIterator = delegateIterator;
         this.hasNext = hasNext;
+        this.stepDecided = stepDecided;
+        this.nextCallsAllowedSemaphore = new BusyWaitSemaphore(bufferSize);
         this.nextMoveIndex = new AtomicInteger(offset);
         this.increment = increment;
     }
@@ -88,7 +104,8 @@ final class NeverEndingMoveGenerator<Solution_> {
             // so all future calls should return null
             return null;
         }
-        if (delegateIterator.hasNext()) {
+        boolean shouldCallNext = nextCallsAllowedSemaphore.acquireUntil(stepDecided);
+        if (shouldCallNext && delegateIterator.hasNext()) {
             // There a next element in the iterator, so we should return that
             return delegateIterator.next();
         } else {
@@ -102,6 +119,10 @@ final class NeverEndingMoveGenerator<Solution_> {
             }
             return null;
         }
+    }
+
+    public void incrementPermits() {
+        nextCallsAllowedSemaphore.release();
     }
 
     /**

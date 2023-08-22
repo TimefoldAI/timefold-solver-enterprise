@@ -1,9 +1,6 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.atomic.AtomicReferenceArray;
+import java.util.concurrent.atomic.*;
 
 import ai.timefold.solver.core.api.score.Score;
 import ai.timefold.solver.core.api.score.director.ScoreDirector;
@@ -91,6 +88,11 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
      */
     private final AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference;
 
+    /**
+     * A boolean that is true when a step been decided.
+     */
+    final AtomicBoolean stepDecided;
+
     private final boolean assertMoveScoreFromScratch;
     private final boolean assertExpectedUndoMoveScore;
     private final boolean assertStepScoreFromScratch;
@@ -106,6 +108,7 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
             OrderByMoveIndexBlockingQueue<Solution_> resultQueue,
             AtomicInteger moveIndex,
             AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference,
+            AtomicBoolean stepDecided,
             boolean assertMoveScoreFromScratch, boolean assertExpectedUndoMoveScore,
             boolean assertStepScoreFromScratch, boolean assertExpectedStepScore,
             boolean assertShadowVariablesAreNotStaleAfterStep) {
@@ -117,6 +120,7 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
         this.resultQueue = resultQueue;
         this.moveIndex = moveIndex;
         this.iteratorReference = iteratorReference;
+        this.stepDecided = stepDecided;
         this.assertMoveScoreFromScratch = assertMoveScoreFromScratch;
         this.assertExpectedUndoMoveScore = assertExpectedUndoMoveScore;
         this.assertStepScoreFromScratch = assertStepScoreFromScratch;
@@ -168,10 +172,6 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                         LOGGER.trace(
                                 "{}            Move thread ({}) step: step index ({}), move index ({}) Generating move.",
                                 logIndentation, moveThreadIndex, stepIndex, generatedMoveIndex);
-                        // Block until space is available for the given move index. It is important to
-                        // block here and not when putting a result to prevent a deadlock (I think;
-                        // it has been a while since when I moved the blocking from addMove to here).
-                        resultQueue.reserveSpaceForMove(generatedMoveIndex);
 
                         // Generate the MoveEvaluationOperation
                         operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex,
@@ -229,10 +229,13 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                                 + moveIndex + ").");
                     }
                     Move<Solution_> move = moveEvaluationOperation.getMove();
-                    if (move == null) {
+                    if (move == null || stepDecided.get()) {
                         // If the generated move is null, this mean the iterator is exhausted.
                         // We call reportIteratorExhausted so the thread will be blocked
                         // when all iterators are exhausted or if the decider picked a move.
+                        //
+                        // Alternatively, if the step has already been decided,
+                        // it is worthless for us to evaluate the move we got
                         LOGGER.trace(
                                 "{}            Move thread ({}) evaluation: step index ({}), move index ({}), iterator exhausted.",
                                 logIndentation, moveThreadIndex, stepIndex, moveIndex);

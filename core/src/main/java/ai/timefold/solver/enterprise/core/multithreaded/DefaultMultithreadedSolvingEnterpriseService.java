@@ -26,7 +26,7 @@ public final class DefaultMultithreadedSolvingEnterpriseService implements Multi
         if (moveThreadBufferSize == null) {
             // TODO Verify this is a good default by more meticulous benchmarking on multiple machines and JDK's
             // If it's too low, move threads will need to wait on the buffer, which hurts performance
-            moveThreadBufferSize = 64;
+            moveThreadBufferSize = 10;
         }
         ThreadFactory threadFactory = configPolicy.buildThreadFactory(ChildThreadType.MOVE_THREAD);
         int selectedMoveBufferSize = moveThreadCount * moveThreadBufferSize;
@@ -52,7 +52,7 @@ public final class DefaultMultithreadedSolvingEnterpriseService implements Multi
         if (moveThreadBufferSize == null) {
             // TODO Verify this is a good default by more meticulous benchmarking on multiple machines and JDK's
             // If it's too low, move threads will need to wait on the buffer, which hurts performance
-            moveThreadBufferSize = 64;
+            moveThreadBufferSize = 10;
         }
         ThreadFactory threadFactory = configPolicy.buildThreadFactory(ChildThreadType.MOVE_THREAD);
         int selectedMoveBufferSize = moveThreadCount * moveThreadBufferSize;
