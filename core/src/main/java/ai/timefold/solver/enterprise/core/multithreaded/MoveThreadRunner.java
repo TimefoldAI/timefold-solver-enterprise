@@ -169,8 +169,18 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                                 "{}            Move thread ({}) step: step index ({}), move index ({}) Generating move.",
                                 logIndentation, moveThreadIndex, stepIndex, generatedMoveIndex);
                         // Block until space is available for the given move index. It is important to
-                        // block here and not when putting a result to prevent a deadlock (I think;
-                        // it has been a while since when I moved the blocking from addMove to here).
+                        // block here and not when putting a result to prevent a newer result overriding
+                        // an older result.
+                        //
+                        // If we block inside the queue instead of here, a move that takes a long
+                        // time to evaluate can have it slot in the ring buffer taken by a newer move.
+                        // In the below example (moveBufferSize / moveThreadCount = 4):
+                        //
+                        // M0(0) ------------------------------
+                        // M1(1) -- M2(2) -- M3(3) -- M4(0)
+                        //
+                        // M4 will take the slot that belongs to M0,
+                        // since it finished evaluating before M4.
                         resultQueue.reserveSpaceForMove(generatedMoveIndex);
 
                         // Generate the MoveEvaluationOperation
