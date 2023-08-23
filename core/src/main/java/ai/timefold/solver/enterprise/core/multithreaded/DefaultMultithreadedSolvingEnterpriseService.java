@@ -25,7 +25,8 @@ public final class DefaultMultithreadedSolvingEnterpriseService implements Multi
         Integer moveThreadBufferSize = configPolicy.getMoveThreadBufferSize();
         if (moveThreadBufferSize == null) {
             // TODO Verify this is a good default by more meticulous benchmarking on multiple machines and JDK's
-            // If it's too low, move threads will need to wait on the buffer, which hurts performance
+            // If it's too low, move threads will need to wait for permits, which hurts performance
+            // If it's too high, more moves are generated that aren't foraged
             moveThreadBufferSize = 10;
         }
         ThreadFactory threadFactory = configPolicy.buildThreadFactory(ChildThreadType.MOVE_THREAD);
@@ -51,7 +52,8 @@ public final class DefaultMultithreadedSolvingEnterpriseService implements Multi
         Integer moveThreadBufferSize = configPolicy.getMoveThreadBufferSize();
         if (moveThreadBufferSize == null) {
             // TODO Verify this is a good default by more meticulous benchmarking on multiple machines and JDK's
-            // If it's too low, move threads will need to wait on the buffer, which hurts performance
+            // If it's too low, move threads will need to wait for permits, which hurts performance
+            // If it's too high, more moves are generated that aren't foraged
             moveThreadBufferSize = 10;
         }
         ThreadFactory threadFactory = configPolicy.buildThreadFactory(ChildThreadType.MOVE_THREAD);
