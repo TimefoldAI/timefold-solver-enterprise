@@ -174,6 +174,16 @@ final class MoveThreadRunner<Solution_, Score_ extends Score<Score_>> implements
                                 logIndentation, moveThreadIndex, stepIndex, generatedMoveIndex);
 
                         // Generate the MoveEvaluationOperation
+                        // We do not need to block here, since generateNextMove is protected by
+                        // a Semaphore that will have at most (moveBufferSize / moveThreadCount) permits.
+                        // This prevents a newer result from overriding an older result, since there
+                        // are exactly (moveBufferSize / moveThreadCount) slots per iterator, and a permit
+                        // is only granted when the solver forages a move. So this is what happens for
+                        // a long move (moveBufferSize / moveThreadCount = 4):
+                        //
+                        // M0(0)----------------------------------------
+                        // P:3->2   P:2->1   P:1->0                      P:0->1->0
+                        // M1(1) -- M2(2) -- M3(3) -- M4(0, blocked) --- M4(0, unblocked) --
                         operation = new MoveEvaluationOperation<>(stepIndex, generatedMoveIndex,
                                 neverEndingMoveGenerator.generateNextMove());
                         LOGGER.trace(
