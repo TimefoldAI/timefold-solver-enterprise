@@ -15,12 +15,12 @@ jobs:
         example: [cloudbalancing, conferencescheduling, curriculumcourse, examination, flightcrewscheduling, machinereassignment, meetingscheduling, nqueens, nurserostering, pas, projectjobscheduling, taskassigning, tennis, travelingtournament, tsp, vehiclerouting]
     steps:
       - name: Checkout timefold-solver
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: './timefold-solver'
           repository: 'TimefoldAI/timefold-solver'
       - name: Checkout timefold-solver-enterprise
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: './timefold-solver-enterprise'
           repository: 'TimefoldAI/timefold-solver-enterprise'
