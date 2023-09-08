@@ -106,7 +106,7 @@ jobs:
       # Pull Request will be created with the changes and a summary of next steps.
       - name: Put back the 999-SNAPSHOT version on the release branch
         run: |
-          git checkout -B ${{ github.event.inputs.releaseBranch }}-bump-micro
+          git checkout -B ${{ github.event.inputs.releaseBranch }}-put-back-999-snapshot
           export NEW_VERSION="999-SNAPSHOT"
           .github/scripts/change_versions.sh
           git push origin ${{ github.event.inputs.releaseBranch }}-put-back-999-snapshot
