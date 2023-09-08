@@ -12,4 +12,4 @@ echo "Detected version: $DETECTED_VERSION"
 echo "     New version: $NEW_VERSION"
 find . -name pom.xml | xargs sed -i "s/$DETECTED_VERSION/$NEW_VERSION/g"
 find . -name pom.xml | xargs git add
-git commit -m "chore: switch to version $NEW_VERSION"
+git commit -m "build: switch to version $NEW_VERSION"

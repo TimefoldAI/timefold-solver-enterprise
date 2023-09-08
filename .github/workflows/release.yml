@@ -13,12 +13,6 @@ on:
         description: 'Release branch to create (e.g. 1.0.x for version 1.0.0; once created, branch protection rules apply)'
         default: dry_run
         required: true
-      nextVersion:
-        description: 'Next version after release (e.g. 1.1.0, -SNAPSHOT will be added automatically)'
-        required: true
-      nextMicroVersion:
-        description: 'Next version after release for release branch (e.g. 1.0.1, -SNAPSHOT will be added automatically)'
-        required: true
       dryRun:
         description: 'Do a dry run? (true or false)'
         default: true
@@ -97,6 +91,8 @@ jobs:
           JRELEASER_GPG_PASSPHRASE: ${{ secrets.JRELEASER_GPG_PASSPHRASE }}
           JRELEASER_GPG_PUBLIC_KEY: ${{ secrets.JRELEASER_GPG_PUBLIC_KEY }}
           JRELEASER_GPG_SECRET_KEY: ${{ secrets.JRELEASER_GPG_SECRET_KEY }}
+          JRELEASER_ARTIFACTORY_USERNAME: ${{ secrets.JRELEASER_JFROG_USERNAME }}
+          JRELEASER_ARTIFACTORY_TOKEN: ${{ secrets.JRELEASER_JFROG_TOKEN }}
 
       - name: JReleaser release output
         uses: actions/upload-artifact@v3
@@ -107,25 +103,13 @@ jobs:
             out/jreleaser/trace.log
             out/jreleaser/output.properties
 
+      # Pull Request will be created with the changes and a summary of next steps.
       - name: Set micro snapshot version on the release branch
         run: |
           git checkout -B ${{ github.event.inputs.releaseBranch }}-bump-micro
-          export NEW_VERSION="${{ github.event.inputs.nextMicroVersion }}-SNAPSHOT"
+          export NEW_VERSION="999-SNAPSHOT"
           .github/scripts/change_versions.sh
           git push origin ${{ github.event.inputs.releaseBranch }}-bump-micro
-          gh pr create --reviewer triceo,ge0ffrey --base ${{ github.event.inputs.releaseBranch }} --head ${{ github.event.inputs.releaseBranch }}-bump-micro --title "chore: move to ${{ github.event.inputs.nextMicroVersion }}-SNAPSHOT" --body-file .github/workflows/release-pr-body-micro.md
-        env:
-          GITHUB_TOKEN: ${{ secrets.JRELEASER_GITHUB_TOKEN }}
-
-      # We do not use versions:set, because we'd have to have the SNAPSHOT version built from somewhere,
-      # and at this point in the release, there is no upstream branch anywhere that would have this version anymore.
-      - name: Switch back to source branch and set snapshot version
-        run: |
-          git checkout ${{ github.event.inputs.sourceBranch }}
-          git checkout -B ${{ github.event.inputs.releaseBranch }}-bump-main
-          export NEW_VERSION="${{ github.event.inputs.nextVersion }}-SNAPSHOT"
-          .github/scripts/change_versions.sh
-          git push origin ${{ github.event.inputs.releaseBranch }}-bump-main
-          gh pr create --reviewer triceo,ge0ffrey --base ${{ github.event.inputs.sourceBranch }} --head ${{ github.event.inputs.releaseBranch }}-bump-main --title "chore: move to ${{ github.event.inputs.nextVersion }}-SNAPSHOT" --body-file .github/workflows/release-pr-body-main.md
+          gh pr create --reviewer triceo,ge0ffrey --base ${{ github.event.inputs.releaseBranch }} --head ${{ github.event.inputs.releaseBranch }}-bump-micro --title "build: move back to 999-SNAPSHOT" --body-file .github/workflows/release-pr-body.md
         env:
           GITHUB_TOKEN: ${{ secrets.JRELEASER_GITHUB_TOKEN }}
