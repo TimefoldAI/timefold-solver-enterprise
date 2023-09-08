@@ -110,6 +110,6 @@ jobs:
           export NEW_VERSION="999-SNAPSHOT"
           .github/scripts/change_versions.sh
           git push origin ${{ github.event.inputs.releaseBranch }}-put-back-999-snapshot
-          gh pr create --reviewer triceo,ge0ffrey --base ${{ github.event.inputs.releaseBranch }} --head ${{ github.event.inputs.releaseBranch }}-bump-micro --title "build: move back to 999-SNAPSHOT" --body-file .github/workflows/release-pr-body.md
+          gh pr create --reviewer triceo,ge0ffrey --base ${{ github.event.inputs.releaseBranch }} --head ${{ github.event.inputs.releaseBranch }}-put-back-999-snapshot --title "build: move back to 999-SNAPSHOT" --body-file .github/workflows/release-pr-body.md
         env:
           GITHUB_TOKEN: ${{ secrets.JRELEASER_GITHUB_TOKEN }}
