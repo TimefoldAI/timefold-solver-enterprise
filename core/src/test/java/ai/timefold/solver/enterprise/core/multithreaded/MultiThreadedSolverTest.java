@@ -1,5 +1,7 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.util.List;
 
 import ai.timefold.solver.core.api.solver.Solver;
@@ -11,6 +13,8 @@ import ai.timefold.solver.core.impl.heuristic.move.Move;
 import ai.timefold.solver.core.impl.heuristic.selector.move.factory.MoveListFactory;
 import ai.timefold.solver.core.impl.testdata.domain.TestdataEntity;
 import ai.timefold.solver.core.impl.testdata.domain.TestdataSolution;
+import ai.timefold.solver.core.impl.testdata.domain.list.TestdataListEntity;
+import ai.timefold.solver.core.impl.testdata.domain.list.TestdataListSolution;
 import ai.timefold.solver.core.impl.testdata.util.PlannerAssert;
 import ai.timefold.solver.core.impl.testdata.util.PlannerTestUtils;
 
@@ -43,6 +47,18 @@ class MultiThreadedSolverTest {
 
         TestdataSolution solution = solver.solve(TestdataSolution.generateSolution());
         PlannerAssert.assertSolutionInitialized(solution);
+    }
+
+    @Test
+    void multiThreadedSolvingListVariable() {
+        SolverConfig solverConfig = PlannerTestUtils.buildSolverConfig(TestdataListSolution.class, TestdataListEntity.class);
+        solverConfig.setMoveThreadCount("1"); // Enable the multi-threaded solving.
+
+        SolverFactory<TestdataListSolution> solverFactory = SolverFactory.create(solverConfig);
+        Solver<TestdataListSolution> solver = solverFactory.buildSolver();
+
+        TestdataListSolution solution = solver.solve(TestdataListSolution.generateUninitializedSolution(10, 10));
+        assertThat(solution.getScore().initScore()).isEqualTo(0);
     }
 
     public static class TestMoveListFactory implements MoveListFactory<TestdataSolution> {

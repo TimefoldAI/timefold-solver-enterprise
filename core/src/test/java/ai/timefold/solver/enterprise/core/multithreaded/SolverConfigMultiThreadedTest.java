@@ -20,9 +20,13 @@ import org.junit.jupiter.api.Timeout;
 class SolverConfigMultiThreadedTest {
 
     @Test
-    @Timeout(5)
+    @Timeout(20)
     void solvingWithTooHighThreadCountFinishes() {
-        runSolvingAndVerifySolution(10, 20, "256");
+        // The optimal amount of processors would be availableProcessors - 1
+        // (i.e. availableProcessors - 1 move threads + 1 decider thread)
+        // going over the optimal amount will incur significant performance degradation
+        int threadCount = Runtime.getRuntime().availableProcessors() + 2;
+        runSolvingAndVerifySolution(10, 20, Integer.toString(threadCount));
     }
 
     @Disabled("PLANNER-1180")

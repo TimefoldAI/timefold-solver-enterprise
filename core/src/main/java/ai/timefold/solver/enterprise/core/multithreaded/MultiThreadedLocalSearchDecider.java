@@ -1,15 +1,13 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CyclicBarrier;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.atomic.*;
 
 import ai.timefold.solver.core.api.domain.solution.PlanningSolution;
 import ai.timefold.solver.core.api.score.Score;
@@ -34,24 +32,42 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
     private final ThreadFactory threadFactory;
     private final int moveThreadCount;
     private final int selectedMoveBufferSize;
+    private final List<MoveSelector<Solution_>> moveSelectorList;
+    private final List<Random> workingRandomList;
 
     private boolean assertStepScoreFromScratch = false;
     private boolean assertExpectedStepScore = false;
     private boolean assertShadowVariablesAreNotStaleAfterStep = false;
 
-    private BlockingQueue<MoveThreadOperation<Solution_>> operationQueue;
+    private AtomicReference<MoveThreadOperation<Solution_>> nextSynchronizedOperation;
+    private AtomicInteger nextSynchronizedOperationIndex;
     private OrderByMoveIndexBlockingQueue<Solution_> resultQueue;
-    private CyclicBarrier moveThreadBarrier;
+    private AtomicInteger moveIndex;
+    private AtomicReferenceArray<NeverEndingMoveGenerator<Solution_>> iteratorReference;
     private ExecutorService executor;
     private List<MoveThreadRunner<Solution_, ?>> moveThreadRunnerList;
 
     public MultiThreadedLocalSearchDecider(String logIndentation, Termination<Solution_> termination,
-            MoveSelector<Solution_> moveSelector, Acceptor<Solution_> acceptor, LocalSearchForager<Solution_> forager,
+            List<MoveSelector<Solution_>> moveSelectorList, List<Random> workingRandomList,
+            Acceptor<Solution_> acceptor, LocalSearchForager<Solution_> forager,
             ThreadFactory threadFactory, int moveThreadCount, int selectedMoveBufferSize) {
-        super(logIndentation, termination, moveSelector, acceptor, forager);
+        super(logIndentation, termination,
+                new MoveSelectorInListProxy<>(moveSelectorList, workingRandomList),
+                acceptor,
+                forager);
         this.threadFactory = threadFactory;
         this.moveThreadCount = moveThreadCount;
         this.selectedMoveBufferSize = selectedMoveBufferSize;
+        this.moveSelectorList = moveSelectorList;
+        this.workingRandomList = workingRandomList;
+        if (moveSelectorList.size() != moveThreadCount) {
+            throw new IllegalArgumentException("The moveSelectorList (" + moveSelectorList
+                    + ") does not have exactly move thread count (" + moveThreadCount + ") elements");
+        }
+        if (moveSelectorList.size() != workingRandomList.size()) {
+            throw new IllegalArgumentException("The workingRandomList (" + workingRandomList
+                    + ") does not have the same size as moveSelectorList (" + moveSelectorList + ").");
+        }
     }
 
     public void setAssertStepScoreFromScratch(boolean assertStepScoreFromScratch) {
@@ -69,43 +85,52 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
     @Override
     public void phaseStarted(LocalSearchPhaseScope<Solution_> phaseScope) {
         super.phaseStarted(phaseScope);
-        // Capacity: number of moves in circulation + number of setup xor step operations + number of destroy operations
-        operationQueue = new ArrayBlockingQueue<>(selectedMoveBufferSize + moveThreadCount + moveThreadCount);
+        nextSynchronizedOperation = new AtomicReference<>();
+        nextSynchronizedOperationIndex = new AtomicInteger(0);
         // Capacity: number of moves in circulation + number of exception handling results
-        resultQueue = new OrderByMoveIndexBlockingQueue<>(selectedMoveBufferSize + moveThreadCount);
-        moveThreadBarrier = new CyclicBarrier(moveThreadCount);
+        resultQueue = new OrderByMoveIndexBlockingQueue<>(moveThreadCount, selectedMoveBufferSize + moveThreadCount);
+        moveIndex = new AtomicInteger(0);
+        iteratorReference = new AtomicReferenceArray<>(moveThreadCount);
         InnerScoreDirector<Solution_, ?> scoreDirector = phaseScope.getScoreDirector();
         executor = createThreadPoolExecutor();
         moveThreadRunnerList = new ArrayList<>(moveThreadCount);
+
+        nextSynchronizedOperation.set(new SetupOperation<>(scoreDirector));
         for (int moveThreadIndex = 0; moveThreadIndex < moveThreadCount; moveThreadIndex++) {
             MoveThreadRunner<Solution_, ?> moveThreadRunner = new MoveThreadRunner<>(
                     logIndentation, moveThreadIndex, true,
-                    operationQueue, resultQueue, moveThreadBarrier,
+                    nextSynchronizedOperation, nextSynchronizedOperationIndex, resultQueue,
+                    moveIndex, iteratorReference,
                     assertMoveScoreFromScratch, assertExpectedUndoMoveScore,
                     assertStepScoreFromScratch, assertExpectedStepScore, assertShadowVariablesAreNotStaleAfterStep);
             moveThreadRunnerList.add(moveThreadRunner);
             executor.submit(moveThreadRunner);
-            operationQueue.add(new SetupOperation<>(scoreDirector));
         }
     }
 
     @Override
     public void phaseEnded(LocalSearchPhaseScope<Solution_> phaseScope) {
         super.phaseEnded(phaseScope);
-        // Tell the move thread runners to stop
-        // Don't clear the operationsQueue to avoid moveThreadBarrier deadlock:
-        // The MoveEvaluationOperations are already cleared and the new ApplyStepOperation isn't added yet.
         DestroyOperation<Solution_> destroyOperation = new DestroyOperation<>();
-        for (int i = 0; i < moveThreadCount; i++) {
-            operationQueue.add(destroyOperation);
-        }
+        // Set to -2, since unless step index overflows, no stepIndex in MoveThreadRunner
+        // will be equal to it (it is set to -1 initially, so cannot use that).
+        nextSynchronizedOperationIndex.set(-2);
+        nextSynchronizedOperation.set(destroyOperation);
+
+        // Unblock the Move Threads, so they will get the DestroyOperation
+        resultQueue.endPhase();
+
+        // Wait for all Move Threads to consume the DestroyOperation
         shutdownMoveThreads();
+
+        // Update the scoreCalculationCount
         long childThreadsScoreCalculationCount = 0;
         for (MoveThreadRunner<Solution_, ?> moveThreadRunner : moveThreadRunnerList) {
             childThreadsScoreCalculationCount += moveThreadRunner.getCalculationCount();
         }
         phaseScope.addChildThreadsScoreCalculationCount(childThreadsScoreCalculationCount);
-        operationQueue = null;
+        nextSynchronizedOperation = null;
+        nextSynchronizedOperationIndex = null;
         resultQueue = null;
         moveThreadRunnerList = null;
     }
@@ -130,34 +155,55 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
     @Override
     public void decideNextStep(LocalSearchStepScope<Solution_> stepScope) {
         int stepIndex = stepScope.getStepIndex();
-        resultQueue.startNextStep(stepIndex);
 
         int selectMoveIndex = 0;
-        int movesInPlay = 0;
-        Iterator<Move<Solution_>> moveIterator = moveSelector.iterator();
-        do {
-            boolean hasNextMove = moveIterator.hasNext();
-            // First fill the buffer so move evaluation can run freely in parallel
-            // For reproducibility, the selectedMoveBufferSize always need to be entirely selected,
-            // even if some of those moves won't end up being evaluated or foraged
-            if (movesInPlay > 0 && (selectMoveIndex >= selectedMoveBufferSize || !hasNextMove)) {
-                if (forageResult(stepScope, stepIndex)) {
-                    break;
-                }
-                movesInPlay--;
+
+        // We will have moveThreadCount == moveSelectorList.size() distinct iterators
+        AtomicLong hasNextRemaining = new AtomicLong(moveThreadCount);
+        for (int i = 0; i < moveThreadCount; i++) {
+            // Use offset i, increment moveThreadCount so the indices generated by each NeverEndingMoveGenerator
+            // are unique
+            // For instance, for thread count = 4, the sequences generated would be:
+            // [0, 4, 8, ...]
+            // [1, 5, 9, ...]
+            // [2, 6, 10, ...]
+            // [3, 7, 11, ...]
+            NeverEndingMoveGenerator<Solution_> sharedGenerator = new NeverEndingMoveGenerator<>(hasNextRemaining,
+                    resultQueue, moveSelectorList.get(i).iterator(), new AtomicBoolean(true), i, moveThreadCount);
+            iteratorReference.set(i, sharedGenerator);
+        }
+        moveIndex.set(0);
+
+        // All variables set up, unblock move generators
+        resultQueue.startNextStep(stepIndex);
+
+        // moveIndex = number of generated moves so far
+        // selectMoveIndex = number of moves foraged so far
+        // if selectMoveIndex < moveIndex, then we still want to forage
+        // even if the resultQueue is blocking (as there are moves waiting
+        // in the resultQueue that we haven't consumed).
+        // If the resultQueue is blocking, that mean the iterator is exhausted
+        // and no more moves will come in
+        while (selectMoveIndex < moveIndex.get() || !resultQueue.checkIfBlocking()) {
+            if (forageResult(stepScope, stepIndex)) {
+                break;
             }
-            if (hasNextMove) {
-                Move<Solution_> move = moveIterator.next();
-                operationQueue.add(new MoveEvaluationOperation<>(stepIndex, selectMoveIndex, move));
-                selectMoveIndex++;
-                movesInPlay++;
-            }
-        } while (movesInPlay > 0);
+            selectMoveIndex++;
+        }
 
         // Do not evaluate the remaining selected moves for this step that haven't started evaluation yet
-        operationQueue.clear();
+        resultQueue.blockMoveThreads();
+
         pickMove(stepScope);
-        // Start doing the step on every move thread. Don't wait for the stepEnded() event.
+
+        // Wait for all threads to finish evaluating moves
+        resultQueue.deciderSyncOnEnd();
+
+        // Set Random state to a deterministic value
+        Random originalWorkingRandom = stepScope.getWorkingRandom();
+        for (int i = 0; i < workingRandomList.size(); i++) {
+            workingRandomList.get(i).setSeed(originalWorkingRandom.nextLong());
+        }
         if (stepScope.getStep() != null) {
             InnerScoreDirector<Solution_, ?> scoreDirector = stepScope.getScoreDirector();
             if (scoreDirector.requiresFlushing() && stepIndex % 100 == 99) {
@@ -166,11 +212,10 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
                 scoreDirector.calculateScore();
             }
             // Increase stepIndex by 1, because it's a preliminary action
-            ApplyStepOperation<Solution_, ?> stepOperation =
-                    new ApplyStepOperation<>(stepIndex + 1, stepScope.getStep(), (Score) stepScope.getScore());
-            for (int i = 0; i < moveThreadCount; i++) {
-                operationQueue.add(stepOperation);
-            }
+            ApplyStepOperation<Solution_, ?> stepOperation = new ApplyStepOperation<>(stepIndex + 1,
+                    stepScope.getStep(), (Score) stepScope.getScore());
+            nextSynchronizedOperationIndex.set(stepIndex + 1);
+            nextSynchronizedOperation.set(stepOperation);
         }
     }
 
@@ -181,6 +226,11 @@ final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecide
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return true;
+        }
+        if (result == null) {
+            // The iterator is exhausted
+            stepScope.getPhaseScope().getSolverScope().checkYielding();
+            return termination.isPhaseTerminated(stepScope.getPhaseScope());
         }
         if (stepIndex != result.getStepIndex()) {
             throw new IllegalStateException("Impossible situation: the solverThread's stepIndex (" + stepIndex
