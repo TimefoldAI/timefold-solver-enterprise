@@ -1,5 +1,8 @@
 package ai.timefold.solver.enterprise.core.multithreaded;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
 import java.util.concurrent.ThreadFactory;
 
 import ai.timefold.solver.core.config.solver.EnvironmentMode;
@@ -15,7 +18,6 @@ import ai.timefold.solver.core.impl.solver.termination.Termination;
 import ai.timefold.solver.core.impl.solver.thread.ChildThreadType;
 
 public final class DefaultMultithreadedSolvingEnterpriseService implements MultithreadedSolvingEnterpriseService {
-
     @Override
     public <Solution_> ConstructionHeuristicDecider<Solution_> buildConstructionHeuristic(int moveThreadCount,
             Termination<Solution_> termination, ConstructionHeuristicForager<Solution_> forager,
@@ -23,8 +25,8 @@ public final class DefaultMultithreadedSolvingEnterpriseService implements Multi
         Integer moveThreadBufferSize = configPolicy.getMoveThreadBufferSize();
         if (moveThreadBufferSize == null) {
             // TODO Verify this is a good default by more meticulous benchmarking on multiple machines and JDK's
-            // If it's too low, move threads will need to wait on the buffer, which hurts performance
-            // If it's too high, more moves are selected that aren't foraged
+            // If it's too low, move threads will need to wait for permits, which hurts performance
+            // If it's too high, more moves are generated that aren't foraged
             moveThreadBufferSize = 10;
         }
         ThreadFactory threadFactory = configPolicy.buildThreadFactory(ChildThreadType.MOVE_THREAD);
@@ -44,19 +46,24 @@ public final class DefaultMultithreadedSolvingEnterpriseService implements Multi
 
     @Override
     public <Solution_> LocalSearchDecider<Solution_> buildLocalSearch(int moveThreadCount, Termination<Solution_> termination,
-            MoveSelector<Solution_> moveSelector, Acceptor<Solution_> acceptor, LocalSearchForager<Solution_> forager,
+            List<MoveSelector<Solution_>> moveSelectorList, Acceptor<Solution_> acceptor,
+            LocalSearchForager<Solution_> forager,
             EnvironmentMode environmentMode, HeuristicConfigPolicy<Solution_> configPolicy) {
         Integer moveThreadBufferSize = configPolicy.getMoveThreadBufferSize();
         if (moveThreadBufferSize == null) {
             // TODO Verify this is a good default by more meticulous benchmarking on multiple machines and JDK's
-            // If it's too low, move threads will need to wait on the buffer, which hurts performance
-            // If it's too high, more moves are selected that aren't foraged
+            // If it's too low, move threads will need to wait for permits, which hurts performance
+            // If it's too high, more moves are generated that aren't foraged
             moveThreadBufferSize = 10;
         }
         ThreadFactory threadFactory = configPolicy.buildThreadFactory(ChildThreadType.MOVE_THREAD);
         int selectedMoveBufferSize = moveThreadCount * moveThreadBufferSize;
+        List<Random> workingRandomList = new ArrayList<>(moveThreadCount);
+        for (int i = 0; i < moveThreadCount; i++) {
+            workingRandomList.add(new Random(i));
+        }
         MultiThreadedLocalSearchDecider<Solution_> multiThreadedDecider = new MultiThreadedLocalSearchDecider<>(
-                configPolicy.getLogIndentation(), termination, moveSelector, acceptor, forager,
+                configPolicy.getLogIndentation(), termination, moveSelectorList, workingRandomList, acceptor, forager,
                 threadFactory, moveThreadCount, selectedMoveBufferSize);
         if (environmentMode.isNonIntrusiveFullAsserted()) {
             multiThreadedDecider.setAssertStepScoreFromScratch(true);
@@ -67,5 +74,4 @@ public final class DefaultMultithreadedSolvingEnterpriseService implements Multi
         }
         return multiThreadedDecider;
     }
-
 }

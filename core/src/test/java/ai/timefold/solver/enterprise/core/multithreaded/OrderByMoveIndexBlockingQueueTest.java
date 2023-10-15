@@ -4,12 +4,8 @@ import static ai.timefold.solver.core.impl.testdata.util.PlannerAssert.assertCod
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import ai.timefold.solver.core.api.score.buildin.simple.SimpleScore;
 import ai.timefold.solver.core.impl.heuristic.move.DummyMove;
@@ -37,8 +33,14 @@ class OrderByMoveIndexBlockingQueueTest {
     @Test
     void addMove() throws InterruptedException {
         // Capacity: 4 moves in circulation + 2 exception handling results
-        OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(4 + 2);
+        int threadCount = 2;
+        AtomicBoolean stepDecided = new AtomicBoolean(false);
+        OrderByMoveIndexBlockingQueue<TestdataSolution> queue =
+                new OrderByMoveIndexBlockingQueue<>(stepDecided, threadCount, 4 + 2);
 
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(queue::waitForDecider);
+        }
         queue.startNextStep(0);
         executorService.submit(() -> queue.addMove(0, 0, 0, new DummyMove("a0"), SimpleScore.of(-100)));
         executorService.submit(() -> queue.addMove(1, 0, 1, new DummyMove("a1"), SimpleScore.of(-1000)));
@@ -59,6 +61,14 @@ class OrderByMoveIndexBlockingQueueTest {
         assertResult("a6", -6, queue.take());
         executorService.submit(() -> queue.addMove(1, 0, 10, new DummyMove("a10"), SimpleScore.of(-10)));
 
+        stepDecided.set(true);
+        queue.blockMoveThreads();
+        for (int i = 0; i < threadCount; i++) {
+            final int offset = i;
+            executorService.submit(() -> queue.reportIteratorExhausted(0, 10 + offset));
+        }
+        queue.deciderSyncOnEnd();
+        stepDecided.set(false);
         queue.startNextStep(1);
         executorService.submit(() -> queue.addMove(0, 1, 0, new DummyMove("b0"), SimpleScore.of(0)));
         executorService.submit(() -> queue.addMove(1, 0, 11, new DummyMove("a11"), SimpleScore.of(-11)));
@@ -69,6 +79,14 @@ class OrderByMoveIndexBlockingQueueTest {
         assertResult("b1", -1, queue.take());
         executorService.submit(() -> queue.addMove(0, 1, 4, new DummyMove("b4"), SimpleScore.of(-4)));
 
+        stepDecided.set(true);
+        queue.blockMoveThreads();
+        for (int i = 0; i < threadCount; i++) {
+            final int offset = i;
+            executorService.submit(() -> queue.reportIteratorExhausted(1, 5 + offset));
+        }
+        queue.deciderSyncOnEnd();
+        stepDecided.set(false);
         queue.startNextStep(2);
         executorService.submit(() -> queue.addMove(1, 2, 2, new DummyMove("c2"), SimpleScore.of(-2)));
         executorService.submit(() -> queue.addMove(1, 2, 1, new DummyMove("c1"), SimpleScore.of(-1)));
@@ -81,8 +99,13 @@ class OrderByMoveIndexBlockingQueueTest {
     @Test
     void addExceptionThrown() throws InterruptedException, ExecutionException {
         // Capacity: 4 moves in circulation + 2 exception handling results
-        OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(4 + 2);
-
+        int threadCount = 2;
+        AtomicBoolean stepDecided = new AtomicBoolean(false);
+        OrderByMoveIndexBlockingQueue<TestdataSolution> queue =
+                new OrderByMoveIndexBlockingQueue<>(stepDecided, threadCount, 4 + 2);
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(queue::waitForDecider);
+        }
         queue.startNextStep(0);
         executorService.submit(() -> queue.addMove(0, 0, 1, new DummyMove("a1"), SimpleScore.of(-1)));
         executorService.submit(() -> queue.addMove(1, 0, 0, new DummyMove("a0"), SimpleScore.of(0)));
@@ -92,6 +115,14 @@ class OrderByMoveIndexBlockingQueueTest {
         assertResult("a1", -1, queue.take());
         assertResult("a2", -2, queue.take());
 
+        stepDecided.set(true);
+        queue.blockMoveThreads();
+        for (int i = 0; i < threadCount; i++) {
+            final int offset = i;
+            executorService.submit(() -> queue.reportIteratorExhausted(0, 4 + offset));
+        }
+        queue.deciderSyncOnEnd();
+        stepDecided.set(false);
         queue.startNextStep(1);
 
         CountDownLatch allPrecedingTasksFinished = new CountDownLatch(3);
@@ -110,32 +141,47 @@ class OrderByMoveIndexBlockingQueueTest {
         allPrecedingTasksFinished.await();
 
         IllegalArgumentException exception = new IllegalArgumentException();
-        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(1, exception));
+        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(1, 3, exception));
         exceptionFuture.get(); // Avoid random failing test when the task hasn't started yet or the next task finishes earlier
         executorService.submit(() -> queue.addMove(0, 1, 2, new DummyMove("b2"), SimpleScore.of(-2))).get();
         assertResult("b0", -3, queue.take());
         assertResult("b1", -1, queue.take());
+        assertResult("b2", -2, queue.take());
         assertThatThrownBy(queue::take).hasCause(exception);
     }
 
     @Test
     void addExceptionIsNotEatenIfNextStepStartsBeforeTaken() throws InterruptedException, ExecutionException {
         // Capacity: 4 moves in circulation + 2 exception handling results
-        OrderByMoveIndexBlockingQueue<TestdataSolution> queue = new OrderByMoveIndexBlockingQueue<>(4 + 2);
+        int threadCount = 2;
+        AtomicBoolean stepDecided = new AtomicBoolean(false);
+        OrderByMoveIndexBlockingQueue<TestdataSolution> queue =
+                new OrderByMoveIndexBlockingQueue<>(stepDecided, threadCount, 4 + 2);
 
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(queue::waitForDecider);
+        }
         queue.startNextStep(0);
         executorService.submit(() -> queue.addMove(0, 0, 1, new DummyMove("a1"), SimpleScore.of(-1)));
         executorService.submit(() -> queue.addMove(1, 0, 0, new DummyMove("a0"), SimpleScore.of(0)));
         executorService.submit(() -> queue.addMove(0, 0, 2, new DummyMove("a2"), SimpleScore.of(-2)));
         executorService.submit(() -> queue.addMove(1, 0, 3, new DummyMove("a3"), SimpleScore.of(-3)));
         IllegalArgumentException exception = new IllegalArgumentException();
-        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(1, exception));
+        Future<?> exceptionFuture = executorService.submit(() -> queue.addExceptionThrown(0, 1, exception));
         assertThatThrownBy(() -> {
             assertResult("a0", 0, queue.take());
             assertResult("a1", -1, queue.take());
             assertResult("a2", -2, queue.take());
 
             exceptionFuture.get(); // Avoid random failing test when the task hasn't started yet
+            stepDecided.set(true);
+            queue.blockMoveThreads();
+            for (int i = 0; i < threadCount; i++) {
+                final int offset = i;
+                executorService.submit(() -> queue.reportIteratorExhausted(0, 4 + offset));
+            }
+            queue.deciderSyncOnEnd();
+            stepDecided.set(false);
             queue.startNextStep(1);
         }).hasCause(exception);
     }
