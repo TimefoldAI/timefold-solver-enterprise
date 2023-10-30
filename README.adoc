@@ -17,7 +17,7 @@ image:https://img.shields.io/github/issues/TimefoldAI/timefold-solver-enterprise
 == Timefold Solver Enterprise Edition
 
 _Timefold Solver Enterprise Edition_ is a commercial offering by _Timefold_.
-It enhances the _Timefold Solver Community Edition_ by features such as nearby selection and multi-threaded solving.
+It enhances the https://github.com/TimefoldAI/timefold-solver[Timefold Solver Community Edition] by features such as nearby selection and multi-threaded solving.
 Even though the source code is available here, *_Timefold Solver Enterprise Edition_ is not open source*.
 
 You are not allowed to modify, distribute, or use this source code and resulting binaries
