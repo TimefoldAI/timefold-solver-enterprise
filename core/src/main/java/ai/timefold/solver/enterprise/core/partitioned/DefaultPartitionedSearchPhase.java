@@ -32,7 +32,7 @@ import ai.timefold.solver.core.impl.solver.thread.ThreadUtils;
  *
  * @param <Solution_> the solution type, the class with the {@link PlanningSolution} annotation
  */
-final class DefaultPartitionedSearchPhase<Solution_> extends AbstractPhase<Solution_>
+public final class DefaultPartitionedSearchPhase<Solution_> extends AbstractPhase<Solution_>
         implements PartitionedSearchPhase<Solution_>, PartitionedSearchPhaseLifecycleListener<Solution_> {
 
     private final SolutionPartitioner<Solution_> solutionPartitioner;
