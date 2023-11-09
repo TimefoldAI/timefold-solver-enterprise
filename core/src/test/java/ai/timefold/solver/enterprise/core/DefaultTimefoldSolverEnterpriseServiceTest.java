@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import ai.timefold.solver.core.config.partitionedsearch.PartitionedSearchPhaseConfig;
 import ai.timefold.solver.core.config.solver.EnvironmentMode;
+import ai.timefold.solver.core.enterprise.TimefoldSolverEnterpriseService;
 import ai.timefold.solver.core.impl.heuristic.HeuristicConfigPolicy;
 import ai.timefold.solver.core.impl.partitionedsearch.DefaultPartitionedSearchPhaseFactory;
 import ai.timefold.solver.core.impl.solver.recaller.BestSolutionRecaller;
@@ -14,11 +15,34 @@ import ai.timefold.solver.core.impl.testdata.domain.TestdataSolution;
 import ai.timefold.solver.enterprise.core.partitioned.DefaultPartitionedSearchPhase;
 import ai.timefold.solver.enterprise.core.partitioned.testdata.TestdataSolutionPartitioner;
 
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 public class DefaultTimefoldSolverEnterpriseServiceTest {
+
+    @Test
+    void loads() {
+        Assertions.assertThat(TimefoldSolverEnterpriseService.load())
+                .isNotNull();
+    }
+
+    @Test
+    void banner() {
+        Assertions.assertThat(TimefoldSolverEnterpriseService.getBanner())
+                .isEqualTo("""
+                             ____         _______
+                            |    |       /      /
+                          __|    |______/______/   _     _                       __           _       _
+                         /             /          | |_  (_)  _ __ ___     ___   / _|   ___   | |   __| |
+                        /___      ____/_______    | __| | | | '_ ` _ \\   / _ \\ | |_   / _ \\  | |  / _` |
+                            |    |    /      /    | |_  | | | | | | | | |  __/ |  _| | (_) | | | | (_| |
+                            |    |___/______/      \\__| |_| |_| |_| |_|  \\___| |_|    \\___/  |_|  \\__,_|
+                            |       /
+                            |______/           Timefold Solver Enterprise Edition (Development snapshot)
+                        """);
+    }
 
     @ParameterizedTest
     @CsvSource({
