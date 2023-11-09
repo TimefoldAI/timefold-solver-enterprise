@@ -29,8 +29,8 @@ public class DefaultTimefoldSolverEnterpriseServiceTest {
     }
 
     @Test
-    void banner() {
-        Assertions.assertThat(TimefoldSolverEnterpriseService.getBanner())
+    void solverVersion() {
+        Assertions.assertThat(TimefoldSolverEnterpriseService.identifySolverVersion())
                 .contains("Enterprise Edition");
     }
 
