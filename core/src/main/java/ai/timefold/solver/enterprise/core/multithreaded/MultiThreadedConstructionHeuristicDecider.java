@@ -28,7 +28,7 @@ import ai.timefold.solver.core.impl.solver.thread.ThreadUtils;
 /**
  * @param <Solution_> the solution type, the class with the {@link PlanningSolution} annotation
  */
-final class MultiThreadedConstructionHeuristicDecider<Solution_> extends ConstructionHeuristicDecider<Solution_> {
+public final class MultiThreadedConstructionHeuristicDecider<Solution_> extends ConstructionHeuristicDecider<Solution_> {
 
     private final ThreadFactory threadFactory;
     private final int moveThreadCount;

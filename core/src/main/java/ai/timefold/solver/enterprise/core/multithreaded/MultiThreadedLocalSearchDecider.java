@@ -29,7 +29,7 @@ import ai.timefold.solver.core.impl.solver.thread.ThreadUtils;
 /**
  * @param <Solution_> the solution type, the class with the {@link PlanningSolution} annotation
  */
-final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecider<Solution_> {
+public final class MultiThreadedLocalSearchDecider<Solution_> extends LocalSearchDecider<Solution_> {
 
     private final ThreadFactory threadFactory;
     private final int moveThreadCount;
