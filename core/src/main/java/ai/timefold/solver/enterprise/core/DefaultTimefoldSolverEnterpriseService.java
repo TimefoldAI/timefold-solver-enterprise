@@ -2,6 +2,8 @@ package ai.timefold.solver.enterprise.core;
 
 import static ai.timefold.solver.core.config.partitionedsearch.PartitionedSearchPhaseConfig.ACTIVE_THREAD_COUNT_AUTO;
 import static ai.timefold.solver.core.config.partitionedsearch.PartitionedSearchPhaseConfig.ACTIVE_THREAD_COUNT_UNLIMITED;
+import static java.util.Optional.empty;
+import static java.util.Optional.of;
 
 import java.util.Arrays;
 import java.util.List;
@@ -277,7 +279,7 @@ public final class DefaultTimefoldSolverEnterpriseService implements TimefoldSol
             if (config.getMinimumSubListSize() != null && config.getMinimumSubListSize() > 1) {
                 throw new IllegalArgumentException("Using minimumSubListSize (" + config.getMinimumSubListSize()
                         + ") is not allowed because the nearby selection distribution uses a "
-                        + configPropertyNameAndValue.getKey() + " (" + configPropertyNameAndValue.getValue()
+                        + configPropertyNameAndValue.key() + " (" + configPropertyNameAndValue.value()
                         + ") which may limit the ability to select all nearby values."
                         + " As a consequence, it may be impossible to select a subList with the required minimumSubListSize."
                         + " Therefore, this combination is prohibited.");
@@ -314,21 +316,19 @@ public final class DefaultTimefoldSolverEnterpriseService implements TimefoldSol
             randomDistributionNearbyLimitation(NearbySelectionConfig nearbySelectionConfig) {
         if (nearbySelectionConfig.getBlockDistributionSizeRatio() != null
                 && nearbySelectionConfig.getBlockDistributionSizeRatio() < 1) {
-            return Optional.of(Pair.of("blockDistributionSizeRatio", nearbySelectionConfig.getBlockDistributionSizeRatio()));
+            return of(new Pair<>("blockDistributionSizeRatio", nearbySelectionConfig.getBlockDistributionSizeRatio()));
         }
         if (nearbySelectionConfig.getBlockDistributionSizeMaximum() != null) {
-            return Optional
-                    .of(Pair.of("blockDistributionSizeMaximum", nearbySelectionConfig.getBlockDistributionSizeMaximum()));
+            return of(new Pair<>("blockDistributionSizeMaximum", nearbySelectionConfig.getBlockDistributionSizeMaximum()));
         }
         if (nearbySelectionConfig.getLinearDistributionSizeMaximum() != null) {
-            return Optional
-                    .of(Pair.of("linearDistributionSizeMaximum", nearbySelectionConfig.getLinearDistributionSizeMaximum()));
+            return of(new Pair<>("linearDistributionSizeMaximum", nearbySelectionConfig.getLinearDistributionSizeMaximum()));
         }
         if (nearbySelectionConfig.getParabolicDistributionSizeMaximum() != null) {
-            return Optional.of(
-                    Pair.of("parabolicDistributionSizeMaximum", nearbySelectionConfig.getParabolicDistributionSizeMaximum()));
+            return of(new Pair<>("parabolicDistributionSizeMaximum",
+                    nearbySelectionConfig.getParabolicDistributionSizeMaximum()));
         }
-        return Optional.empty();
+        return empty();
     }
 
     @Override

@@ -44,7 +44,7 @@ final class PartitionChangeMove<Solution_> extends AbstractMove<Solution_> {
                 for (GenuineVariableDescriptor<Solution_> variableDescriptor : entityDescriptor
                         .getGenuineVariableDescriptorList()) {
                     Object value = variableDescriptor.getValue(entity);
-                    changeMap.get(variableDescriptor).add(Pair.of(entity, value));
+                    changeMap.get(variableDescriptor).add(new Pair<>(entity, value));
                 }
             }
         });
@@ -66,8 +66,8 @@ final class PartitionChangeMove<Solution_> extends AbstractMove<Solution_> {
         for (Map.Entry<GenuineVariableDescriptor<Solution_>, List<Pair<Object, Object>>> entry : changeMap.entrySet()) {
             GenuineVariableDescriptor<Solution_> variableDescriptor = entry.getKey();
             for (Pair<Object, Object> pair : entry.getValue()) {
-                Object entity = pair.getKey();
-                Object value = pair.getValue();
+                Object entity = pair.key();
+                Object value = pair.value();
                 innerScoreDirector.changeVariableFacade(variableDescriptor, entity, value);
             }
         }
@@ -92,13 +92,13 @@ final class PartitionChangeMove<Solution_> extends AbstractMove<Solution_> {
             List<Pair<Object, Object>> originPairList = entry.getValue();
             List<Pair<Object, Object>> destinationPairList = new ArrayList<>(originPairList.size());
             for (Pair<Object, Object> pair : originPairList) {
-                Object originEntity = pair.getKey();
+                Object originEntity = pair.key();
                 Object destinationEntity = destinationScoreDirector.lookUpWorkingObject(originEntity);
                 if (destinationEntity == null && originEntity != null) {
                     throw new IllegalStateException("The destinationEntity (" + destinationEntity
                             + ") cannot be null if the originEntity (" + originEntity + ") is not null.");
                 }
-                Object originValue = pair.getValue();
+                Object originValue = pair.value();
                 Object destinationValue = destinationScoreDirector.lookUpWorkingObject(originValue);
                 if (destinationValue == null && originValue != null) {
                     throw new IllegalStateException("The destinationEntity (" + destinationEntity
@@ -109,7 +109,7 @@ final class PartitionChangeMove<Solution_> extends AbstractMove<Solution_> {
                             + ") as problem fact in the planning solution with a "
                             + ProblemFactCollectionProperty.class.getSimpleName() + " annotation.");
                 }
-                destinationPairList.add(Pair.of(destinationEntity, destinationValue));
+                destinationPairList.add(new Pair<>(destinationEntity, destinationValue));
             }
             destinationChangeMap.put(variableDescriptor, destinationPairList);
         }
