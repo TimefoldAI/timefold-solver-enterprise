@@ -28,7 +28,7 @@ final class PartitionChangeMove<Solution_> extends AbstractMove<Solution_> {
         SolutionDescriptor<Solution_> solutionDescriptor = scoreDirector.getSolutionDescriptor();
         Solution_ workingSolution = scoreDirector.getWorkingSolution();
 
-        int entityCount = solutionDescriptor.getEntityCount(workingSolution);
+        int entityCount = scoreDirector.getWorkingGenuineEntityCount();
         Map<GenuineVariableDescriptor<Solution_>, List<Pair<Object, Object>>> changeMap = new LinkedHashMap<>(
                 solutionDescriptor.getEntityDescriptors().size() * 3);
         for (EntityDescriptor<Solution_> entityDescriptor : solutionDescriptor.getEntityDescriptors()) {
