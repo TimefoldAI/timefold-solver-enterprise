@@ -31,7 +31,7 @@
       Do not upgrade unless prepared to deal with JPMS issues.
       If upgrading, ensure build still passes with the full profile (-Dfull).
     -->
-    <version.javadoc.plugin>3.6.2</version.javadoc.plugin>
+    <version.javadoc.plugin>3.6.3</version.javadoc.plugin>
     <version.resources.plugin>3.3.1</version.resources.plugin>
     <version.sonar.plugin>3.10.0.2594</version.sonar.plugin>
     <version.source.plugin>3.3.0</version.source.plugin>
