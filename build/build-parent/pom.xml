@@ -6,7 +6,7 @@
   <parent>
     <groupId>ai.timefold.solver.enterprise</groupId>
     <artifactId>timefold-solver-enterprise-parent</artifactId>
-    <version>999-SNAPSHOT</version>
+    <version>1.5.0</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
