@@ -29,6 +29,35 @@
   <build>
     <plugins>
       <plugin>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-extension-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>extension-descriptor</goal>
+            </goals>
+            <phase>compile</phase>
+            <configuration>
+              <capabilities>
+                <provides>ai.timefold.solver.timefold-enterprise-quarkus</provides>
+              </capabilities>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>io.quarkus</groupId>
+              <artifactId>quarkus-extension-processor</artifactId>
+              <version>${version.io.quarkus}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+      <plugin>
         <artifactId>maven-dependency-plugin</artifactId>
         <configuration>
           <ignoredUnusedDeclaredDependencies>
