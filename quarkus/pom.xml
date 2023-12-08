@@ -10,7 +10,8 @@
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
-  <artifactId>timefold-solver-enterprise-quarkus</artifactId>
+  <artifactId>timefold-solver-enterprise-quarkus-parent</artifactId>
+  <packaging>pom</packaging>
 
   <name>Timefold Solver Enterprise Edition Quarkus integration</name>
   <description>
@@ -22,35 +23,15 @@
   </description>
   <url>https://timefold.ai</url>
 
-  <packaging>jar</packaging>
-
   <properties>
-    <java.module.name>ai.timefold.solver.enterprise.quarkus</java.module.name>
+    <!-- TODO Quarkus is riddled with duplicate classes, see https://github.com/quarkusio/quarkus/issues/9834 -->
+    <enforcer.failOnDuplicatedClasses>false</enforcer.failOnDuplicatedClasses>
   </properties>
 
-  <dependencies>
-    <dependency>
-      <groupId>ai.timefold.solver.enterprise</groupId>
-      <artifactId>timefold-solver-enterprise-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>ai.timefold.solver</groupId>
-      <artifactId>timefold-solver-quarkus</artifactId>
-    </dependency>
-  </dependencies>
-
-  <build>
-    <plugins>
-      <plugin>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <configuration>
-          <ignoredUnusedDeclaredDependencies>
-            <dependency>ai.timefold.solver:*:jar</dependency>
-            <dependency>ai.timefold.solver.enterprise:*:jar</dependency>
-          </ignoredUnusedDeclaredDependencies>
-        </configuration>
-      </plugin>
-    </plugins>
-  </build>
+  <modules>
+    <module>runtime</module>
+    <module>deployment</module>
+    <module>integration-test</module>
+  </modules>
 
 </project>
