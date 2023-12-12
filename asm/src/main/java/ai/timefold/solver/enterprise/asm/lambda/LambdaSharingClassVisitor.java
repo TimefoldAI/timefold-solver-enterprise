@@ -1,11 +1,12 @@
 package ai.timefold.solver.enterprise.asm.lambda;
 
+import static ai.timefold.solver.enterprise.asm.ASMConstants.ASM_VERSION;
+
 import java.util.HashMap;
 import java.util.Map;
 
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Opcodes;
 
 final class LambdaSharingClassVisitor extends ClassVisitor {
     private final Map<String, String> methodIdToCanonicalMethodId;
@@ -18,7 +19,7 @@ final class LambdaSharingClassVisitor extends ClassVisitor {
     LambdaSharingClassVisitor(ClassVisitor classVisitor, String className,
             Map<String, String> methodIdToCanonicalMethodId,
             Map<String, LambdaSharingMethodVisitor.InvokeDynamicArgs> generatedFieldNameToInvokeDynamicArgs) {
-        super(Opcodes.ASM9, classVisitor);
+        super(ASM_VERSION, classVisitor);
         this.methodIdToCanonicalMethodId = methodIdToCanonicalMethodId;
         this.generatedFieldNameToInvokeDynamicArgs = generatedFieldNameToInvokeDynamicArgs;
         this.classInternalName = className.replace('.', '/');

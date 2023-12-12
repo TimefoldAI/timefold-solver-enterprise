@@ -19,8 +19,7 @@ final class SharedLambdaFieldsInitializerMethodVisitor extends MethodVisitor {
 
     @Override
     public void visitCode() {
-        for (Map.Entry<String, LambdaSharingMethodVisitor.InvokeDynamicArgs> generatedFieldNameAndInitializerEntry : generatedFieldNameToInvokeDynamicArgs
-                .entrySet()) {
+        for (var generatedFieldNameAndInitializerEntry : generatedFieldNameToInvokeDynamicArgs.entrySet()) {
             String generatedFieldName = generatedFieldNameAndInitializerEntry.getKey();
             LambdaSharingMethodVisitor.InvokeDynamicArgs invokeDynamicArgs = generatedFieldNameAndInitializerEntry.getValue();
             mv.visitInvokeDynamicInsn(invokeDynamicArgs.name(),

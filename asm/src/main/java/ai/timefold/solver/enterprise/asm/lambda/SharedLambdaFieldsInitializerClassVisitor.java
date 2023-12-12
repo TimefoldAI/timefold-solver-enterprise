@@ -1,5 +1,7 @@
 package ai.timefold.solver.enterprise.asm.lambda;
 
+import static ai.timefold.solver.enterprise.asm.ASMConstants.ASM_VERSION;
+
 import java.lang.reflect.Modifier;
 import java.util.Map;
 
@@ -15,12 +17,11 @@ final class SharedLambdaFieldsInitializerClassVisitor extends ClassVisitor {
 
     SharedLambdaFieldsInitializerClassVisitor(ClassVisitor classVisitor, String className,
             Map<String, LambdaSharingMethodVisitor.InvokeDynamicArgs> generatedFieldNameToInvokeDynamicArgs) {
-        super(Opcodes.ASM9, classVisitor);
+        super(ASM_VERSION, classVisitor);
         this.generatedFieldNameToInvokeDynamicArgs = generatedFieldNameToInvokeDynamicArgs;
         this.classInternalName = className.replace('.', '/');
 
-        for (Map.Entry<String, LambdaSharingMethodVisitor.InvokeDynamicArgs> generatedFieldAndInitializerEntry : generatedFieldNameToInvokeDynamicArgs
-                .entrySet()) {
+        for (var generatedFieldAndInitializerEntry : generatedFieldNameToInvokeDynamicArgs.entrySet()) {
             String fieldName = generatedFieldAndInitializerEntry.getKey();
             var invokeDynamicArgs = generatedFieldAndInitializerEntry.getValue();
             Type fieldDescriptor = invokeDynamicArgs.getFieldDescriptor();
@@ -38,7 +39,7 @@ final class SharedLambdaFieldsInitializerClassVisitor extends ClassVisitor {
             final String[] exceptions) {
         if (name.equals("<clinit>")) {
             hasClinit = true;
-            return new SharedLambdaFieldsInitializerMethodVisitor(Opcodes.ASM9,
+            return new SharedLambdaFieldsInitializerMethodVisitor(ASM_VERSION,
                     super.visitMethod(access, name, descriptor, signature, exceptions),
                     classInternalName, generatedFieldNameToInvokeDynamicArgs);
 

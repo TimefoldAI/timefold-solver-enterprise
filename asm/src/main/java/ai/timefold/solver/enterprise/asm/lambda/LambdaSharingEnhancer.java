@@ -1,5 +1,7 @@
 package ai.timefold.solver.enterprise.asm.lambda;
 
+import static ai.timefold.solver.enterprise.asm.ASMConstants.ASM_VERSION;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -9,7 +11,6 @@ import java.util.Map;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.Opcodes;
 
 public class LambdaSharingEnhancer {
     public static byte[] shareLambdasInClass(Class<?> clazz) throws IOException {
@@ -27,29 +28,29 @@ public class LambdaSharingEnhancer {
         Map<String, LambdaSharingMethodVisitor.InvokeDynamicArgs> generatedFieldNameToInvokeDynamicArgs = new LinkedHashMap<>();
 
         // First pass: record method bytecode
-        ClassWriter classWriter = new ClassWriter(Opcodes.ASM9);
+        ClassWriter classWriter = new ClassWriter(ASM_VERSION);
         ClassVisitor classVisitor =
                 new BytecodeRecordingClassVisitor(classWriter, methodNameToCanonicalMethod);
         ClassReader classReader = new ClassReader(inputBytes);
-        classReader.accept(classVisitor, Opcodes.ASM9);
+        classReader.accept(classVisitor, ASM_VERSION);
 
         // Second pass: replace lambdas with static field reads
         inputBytes = classWriter.toByteArray();
-        classWriter = new ClassWriter(Opcodes.ASM9);
+        classWriter = new ClassWriter(ASM_VERSION);
         classVisitor =
                 new LambdaSharingClassVisitor(classWriter, name, methodNameToCanonicalMethod,
                         generatedFieldNameToInvokeDynamicArgs);
         classReader = new ClassReader(inputBytes);
-        classReader.accept(classVisitor, Opcodes.ASM9);
+        classReader.accept(classVisitor, ASM_VERSION);
         inputBytes = classWriter.toByteArray();
 
         // Final pass: initialize static fields with recorded invokedynamic
-        classWriter = new ClassWriter(Opcodes.ASM9);
+        classWriter = new ClassWriter(ASM_VERSION);
         classVisitor =
                 new SharedLambdaFieldsInitializerClassVisitor(classWriter, name,
                         generatedFieldNameToInvokeDynamicArgs);
         classReader = new ClassReader(inputBytes);
-        classReader.accept(classVisitor, Opcodes.ASM9);
+        classReader.accept(classVisitor, ASM_VERSION);
         return classWriter.toByteArray();
     }
 }

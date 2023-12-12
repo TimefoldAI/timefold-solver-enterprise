@@ -1,15 +1,32 @@
 package ai.timefold.solver.enterprise.asm.lambda;
 
-import java.lang.invoke.*;
+import static ai.timefold.solver.enterprise.asm.ASMConstants.ASM_VERSION;
+
+import java.lang.invoke.CallSite;
+import java.lang.invoke.LambdaMetafactory;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.function.*;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.ToIntBiFunction;
+import java.util.function.ToIntFunction;
 
-import ai.timefold.solver.core.api.function.*;
+import ai.timefold.solver.core.api.function.PentaFunction;
+import ai.timefold.solver.core.api.function.PentaPredicate;
+import ai.timefold.solver.core.api.function.QuadFunction;
+import ai.timefold.solver.core.api.function.QuadPredicate;
+import ai.timefold.solver.core.api.function.ToIntQuadFunction;
+import ai.timefold.solver.core.api.function.ToIntTriFunction;
+import ai.timefold.solver.core.api.function.TriFunction;
+import ai.timefold.solver.core.api.function.TriPredicate;
 
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.InstructionAdapter;
 
@@ -46,7 +63,7 @@ final class LambdaSharingMethodVisitor extends InstructionAdapter {
             Map<MethodReferenceId, String> methodReferenceIdToGeneratedFieldName,
             Map<LambdaId, String> lambdaIdToGeneratedFieldName,
             Map<String, InvokeDynamicArgs> generatedFieldNameToInvokeDynamicArgs) {
-        super(Opcodes.ASM9, methodVisitor);
+        super(ASM_VERSION, methodVisitor);
         this.classInternalName = classInternalName;
         this.methodIdToCanonicalMethodId = methodIdToCanonicalMethodId;
         this.methodReferenceIdToGeneratedFieldName = methodReferenceIdToGeneratedFieldName;
@@ -56,10 +73,6 @@ final class LambdaSharingMethodVisitor extends InstructionAdapter {
 
     static String getMethodId(String name, String descriptor) {
         return name + " " + descriptor;
-    }
-
-    static String getMethodName(String key) {
-        return key.substring(0, key.indexOf(' '));
     }
 
     static String getDescriptor(String key) {
@@ -152,14 +165,14 @@ final class LambdaSharingMethodVisitor extends InstructionAdapter {
         }
         int fieldId = generatedFieldNameToInvokeDynamicArgs.size();
         String generatedFieldName = "$timefoldSharedLambda" + fieldId;
-        String signature = FunctionalInterface.getInterfaceSignature(Type.getReturnType(descriptor), methodGenericSignature);
+        String signature = InterfaceSignature.getInterfaceSignature(Type.getReturnType(descriptor), methodGenericSignature);
         generatedFieldNameToInvokeDynamicArgs.put(generatedFieldName,
                 new InvokeDynamicArgs(name, descriptor, bootstrapMethodHandle, bootstrapMethodArguments, signature));
         idToGeneratedField.put(id, generatedFieldName);
         this.getstatic(classInternalName, generatedFieldName, fieldType.getDescriptor());
     }
 
-    private enum FunctionalInterface {
+    private enum InterfaceSignature {
         // Predicates
         PREDICATE(Predicate.class, Type::getArgumentTypes),
         BI_PREDICATE(BiPredicate.class, Type::getArgumentTypes),
@@ -189,7 +202,7 @@ final class LambdaSharingMethodVisitor extends InstructionAdapter {
         final Class<?> interfaceClass;
         final Function<Type, Type[]> methodGenericSignatureToClassGenericArgs;
 
-        FunctionalInterface(Class<?> interfaceClass,
+        InterfaceSignature(Class<?> interfaceClass,
                 Function<Type, Type[]> methodGenericSignatureToClassGenericArgs) {
             this.interfaceClass = interfaceClass;
             this.methodGenericSignatureToClassGenericArgs = methodGenericSignatureToClassGenericArgs;
@@ -218,7 +231,7 @@ final class LambdaSharingMethodVisitor extends InstructionAdapter {
         }
 
         public static String getInterfaceSignature(Type interfaceType, Type methodGenericSignature) {
-            for (FunctionalInterface functionalInterface : values()) {
+            for (InterfaceSignature functionalInterface : values()) {
                 if (Type.getType(functionalInterface.interfaceClass).equals(interfaceType)) {
                     return functionalInterface.getInterfaceSignature(methodGenericSignature);
                 }

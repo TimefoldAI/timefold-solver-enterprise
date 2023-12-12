@@ -1,12 +1,13 @@
 package ai.timefold.solver.enterprise.asm.lambda;
 
+import static ai.timefold.solver.enterprise.asm.ASMConstants.ASM_VERSION;
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.function.Consumer;
 
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.commons.InstructionAdapter;
 import org.objectweb.asm.util.Printer;
 import org.objectweb.asm.util.Textifier;
@@ -14,12 +15,12 @@ import org.objectweb.asm.util.TraceMethodVisitor;
 
 final class BytecodeRecordingMethodVisitor extends InstructionAdapter {
     public BytecodeRecordingMethodVisitor(MethodVisitor methodVisitor, Consumer<String> methodBytecodeConsumer) {
-        super(Opcodes.ASM9, getBytecodeRecorder(methodVisitor, methodBytecodeConsumer));
+        super(ASM_VERSION, getBytecodeRecorder(methodVisitor, methodBytecodeConsumer));
     }
 
     private static MethodVisitor getBytecodeRecorder(final MethodVisitor methodVisitor,
             Consumer<String> methodBytecodeConsumer) {
-        Printer p = new Textifier(Opcodes.ASM9) {
+        Printer p = new Textifier(ASM_VERSION) {
             @Override
             public void visitLineNumber(int number, Label label) {
                 // Record nothing; metadata

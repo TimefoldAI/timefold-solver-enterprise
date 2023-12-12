@@ -1,18 +1,19 @@
 package ai.timefold.solver.enterprise.asm.lambda;
 
+import static ai.timefold.solver.enterprise.asm.ASMConstants.ASM_VERSION;
+
 import java.util.HashMap;
 import java.util.Map;
 
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Opcodes;
 
 final class BytecodeRecordingClassVisitor extends ClassVisitor {
     private final Map<String, String> methodNameToBytecode = new HashMap<>();
     private final Map<String, String> methodIdToCanonicalMethodId;
 
     BytecodeRecordingClassVisitor(ClassVisitor classVisitor, Map<String, String> methodIdToCanonicalMethodId) {
-        super(Opcodes.ASM9, classVisitor);
+        super(ASM_VERSION, classVisitor);
         this.methodIdToCanonicalMethodId = methodIdToCanonicalMethodId;
     }
 
@@ -26,7 +27,7 @@ final class BytecodeRecordingClassVisitor extends ClassVisitor {
         return new BytecodeRecordingMethodVisitor(super.visitMethod(access, name, descriptor, signature, exceptions),
                 (bytecode) -> {
                     String key = LambdaSharingMethodVisitor.getMethodId(name, descriptor);
-                    for (Map.Entry<String, String> existingBytecodeEntry : methodNameToBytecode.entrySet()) {
+                    for (var existingBytecodeEntry : methodNameToBytecode.entrySet()) {
                         String existingKey = existingBytecodeEntry.getKey();
                         String existingMethodDescriptor = LambdaSharingMethodVisitor.getDescriptor(existingKey);
                         if (!descriptor.equals(existingMethodDescriptor)) {
