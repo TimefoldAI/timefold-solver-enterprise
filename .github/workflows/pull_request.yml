@@ -118,7 +118,7 @@ jobs:
       - name: "Setup Java and Maven"
         uses: actions/setup-java@v4
         with:
-          java-version: ${{matrix.java-version}}
+          java-version: '17'
           distribution: 'temurin'
           cache: 'maven'
       - name: Quickly build timefold-solver
