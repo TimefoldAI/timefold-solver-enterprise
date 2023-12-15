@@ -95,7 +95,7 @@ jobs:
           JRELEASER_ARTIFACTORY_TOKEN: ${{ secrets.JRELEASER_JFROG_TOKEN }}
 
       - name: JReleaser release output
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: jreleaser-release
