@@ -1,0 +1,15 @@
+---
+name: "Timefold Enterprise"
+metadata:
+  keywords:
+    - "timefold"
+    - "constraint-solver"
+    - "artificial-intelligence"
+    - "employee-rostering"
+    - "vehicle-routing-problem"
+    - "maintenance-scheduling"
+    - "timetabling"
+  #  guide: "https://quarkus.io/guides/timefold"
+  categories:
+    - "business-automation"
+  status: "stable"

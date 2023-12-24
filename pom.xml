@@ -2,59 +2,60 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
-    <modelVersion>4.0.0</modelVersion>
+  <modelVersion>4.0.0</modelVersion>
 
-    <groupId>ai.timefold.solver.enterprise</groupId>
-    <artifactId>timefold-solver-enterprise-parent</artifactId>
-    <version>999-SNAPSHOT</version> <!-- Keep in sync with Community Edition. -->
-    <packaging>pom</packaging>
-    <name>Timefold Solver Enterprise Edition</name>
-    <description>
-        Timefold solves planning problems.
-        This lightweight, embeddable planning engine implements powerful and scalable algorithms
-        to optimize business resource scheduling and planning.
+  <groupId>ai.timefold.solver.enterprise</groupId>
+  <artifactId>timefold-solver-enterprise-parent</artifactId>
+  <version>999-SNAPSHOT</version> <!-- Keep in sync with Community Edition. -->
+  <packaging>pom</packaging>
+  <name>Timefold Solver Enterprise Edition</name>
+  <description>
+    Timefold solves planning problems.
+    This lightweight, embeddable planning engine implements powerful and scalable algorithms
+    to optimize business resource scheduling and planning.
 
-        This module is just the multiproject parent for the Enterprise Edition.
-        The planning engine itself is in timefold-solver-enterprise-core.
-    </description>
-    <url>https://timefold.ai</url>
-    <inceptionYear>2023</inceptionYear>
+    This module is just the multiproject parent for the Enterprise Edition.
+    The planning engine itself is in timefold-solver-enterprise-core.
+  </description>
+  <url>https://timefold.ai</url>
+  <inceptionYear>2023</inceptionYear>
 
-    <properties>
-        <enforcer.failOnDuplicatedClasses>false</enforcer.failOnDuplicatedClasses> <!-- Quarkus. -->
-    </properties>
+  <properties>
+    <enforcer.failOnDuplicatedClasses>false</enforcer.failOnDuplicatedClasses> <!-- Quarkus. -->
+  </properties>
 
-    <licenses>
-        <license>
-            <name>Timefold Commercial License</name>
-            <url>https://timefold.ai/company/contact/</url>
-            <distribution>repo</distribution>
-        </license>
-    </licenses>
+  <licenses>
+    <license>
+      <name>Timefold Commercial License</name>
+      <url>https://timefold.ai/company/contact/</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
 
-    <scm>
-        <connection>scm:git:git@github.com:TimefoldAI/timefold-solver-enterprise.git</connection>
-        <developerConnection>scm:git:git@github.com:TimefoldAI/timefold-solver-enterprise.git</developerConnection>
-        <url>https://github.com/TimefoldAI/timefold-solver-enterprise</url>
-    </scm>
-    <issueManagement>
-        <system>GitHub</system>
-        <url>https://github.com/TimefoldAI/timefold-solver-enterprise/issues/</url>
-    </issueManagement>
-    <developers>
-        <developer>
-            <name>Timefold Engineering</name>
-            <organization>Timefold</organization>
-            <organizationUrl>https://timefold.ai</organizationUrl>
-        </developer>
-    </developers>
+  <scm>
+    <connection>scm:git:git@github.com:TimefoldAI/timefold-solver-enterprise.git</connection>
+    <developerConnection>scm:git:git@github.com:TimefoldAI/timefold-solver-enterprise.git</developerConnection>
+    <url>https://github.com/TimefoldAI/timefold-solver-enterprise</url>
+  </scm>
+  <issueManagement>
+    <system>GitHub</system>
+    <url>https://github.com/TimefoldAI/timefold-solver-enterprise/issues/</url>
+  </issueManagement>
+  <developers>
+    <developer>
+      <name>Timefold Engineering</name>
+      <organization>Timefold</organization>
+      <organizationUrl>https://timefold.ai</organizationUrl>
+    </developer>
+  </developers>
 
-    <modules>
-        <module>build/bom</module>
-        <module>build/build-parent</module>
-        <module>core</module>
-        <module>quarkus</module>
-        <module>spring-boot</module>
-    </modules>
+  <modules>
+    <module>build/bom</module>
+    <module>build/build-parent</module>
+    <module>core</module>
+    <module>asm</module>
+    <module>quarkus</module>
+    <module>spring-boot</module>
+  </modules>
 
 </project>

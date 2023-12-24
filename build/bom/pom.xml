@@ -57,6 +57,17 @@
       </dependency>
       <dependency>
         <groupId>ai.timefold.solver.enterprise</groupId>
+        <artifactId>timefold-solver-enterprise-asm</artifactId>
+        <version>${version.ai.timefold.solver}</version>
+      </dependency>
+      <dependency>
+        <groupId>ai.timefold.solver.enterprise</groupId>
+        <artifactId>timefold-solver-enterprise-asm</artifactId>
+        <version>${version.ai.timefold.solver}</version>
+        <type>sources</type>
+      </dependency>
+      <dependency>
+        <groupId>ai.timefold.solver.enterprise</groupId>
         <artifactId>timefold-solver-enterprise-quarkus</artifactId>
         <version>${version.ai.timefold.solver}</version>
       </dependency>

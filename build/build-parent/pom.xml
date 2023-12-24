@@ -18,6 +18,10 @@
 
   <properties>
     <!-- ************************************************************************ -->
+    <!-- Dependencies -->
+    <!-- ************************************************************************ -->
+    <version.io.quarkus>3.6.1</version.io.quarkus>
+    <!-- ************************************************************************ -->
     <!-- Plugins -->
     <!-- ************************************************************************ -->
     <version.compiler.plugin>3.12.0</version.compiler.plugin>
@@ -81,12 +85,24 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
+      <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-bom</artifactId>
+        <version>${version.io.quarkus}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
   <build>
     <pluginManagement>
       <plugins>
+        <plugin>
+          <groupId>io.quarkus</groupId>
+          <artifactId>quarkus-maven-plugin</artifactId>
+          <version>${version.io.quarkus}</version>
+        </plugin>
         <plugin>
           <artifactId>maven-dependency-plugin</artifactId>
           <version>${version.dependency.plugin}</version>
@@ -449,7 +465,8 @@
     <profile>
       <id>sonarcloud-analysis</id>
       <properties>
-        <sonar.coverage.jacoco.xmlReportPaths>${project.reporting.outputDirectory}/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.coverage.jacoco.xmlReportPaths>${project.reporting.outputDirectory}/jacoco/jacoco.xml
+        </sonar.coverage.jacoco.xmlReportPaths>
         <sonar.java.source>${maven.compiler.release}</sonar.java.source>
         <!-- Go to target/classes to avoid SonarCloud complaining about generated Java source code. -->
         <sonar.java.binaries>${project.build.outputDirectory}</sonar.java.binaries>
